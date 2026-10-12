@@ -64,6 +64,266 @@
         {"label": "Site, builder, admin", "value": "planned in E4", "state": "planned"},
         {"label": "Old Vuetify UI", "value": "tag legacy-final", "state": "off"}
       ]
+    },
+    {
+      "key": "lead",
+      "type": "lead",
+      "title": "ABOUT",
+      "text": "**synthwerk-studio** is the public site, the landing page builder and the admin dashboard of the [synthwerk](https://github.com/VelimirMueller/synthwerk) stack. It is also the app shell for SDK apps. Today it is a skeleton, cleaned to the bone on purpose. The bones are good."
+    },
+    {
+      "key": "what",
+      "type": "notes",
+      "title": "THE SHORT VERSION",
+      "columns": 2,
+      "items": [
+        {
+          "lead": "One app, three surfaces",
+          "text": "One Nuxt 4 app serves three surfaces: public site, page builder, admin dashboard."
+        },
+        {
+          "lead": "App shell",
+          "text": "The same app is the shell for SDK apps."
+        },
+        {
+          "lead": "German and English",
+          "text": "Prerendered pages in German and English. Dark mode follows the system."
+        },
+        {
+          "lead": "Accessible",
+          "text": "Accessibility to WCAG 2.2 AA."
+        },
+        {
+          "lead": "Privacy",
+          "text": "Consent per German GDPR law."
+        },
+        {
+          "lead": "Not yet",
+          "text": "None of this runs yet. The rewrite is epic E4 Studio core."
+        }
+      ]
+    },
+    {
+      "key": "startnotes",
+      "type": "notes",
+      "title": "WHAT YOU GET",
+      "columns": 3,
+      "items": [
+        {
+          "lead": "Nothing runs",
+          "text": "Nothing installs and nothing runs. There is no code to run. The quick start is: get the skeleton, look at it."
+        },
+        {
+          "lead": "Read the map first",
+          "text": "The ecosystem map is [synthwerk](https://github.com/VelimirMueller/synthwerk)."
+        },
+        {
+          "lead": "Blueprint",
+          "text": "Shared CI, lint configs and templates: [synthwerk-blueprint](https://github.com/VelimirMueller/synthwerk-blueprint)."
+        }
+      ]
+    },
+    {
+      "key": "hownotes",
+      "type": "notes",
+      "title": "WHO TALKS TO WHOM",
+      "columns": 2,
+      "items": [
+        {
+          "lead": "Browsers",
+          "text": "Browsers talk to studio only. Studio talks to the services."
+        },
+        {
+          "lead": "Login",
+          "text": "`synthwerk-identity` provides login, users and roles."
+        },
+        {
+          "lead": "Chat and AI",
+          "text": "`synthwerk-llm` provides chat and AI settings."
+        },
+        {
+          "lead": "Live health",
+          "text": "Live health streams from `synthwerk-pulse` over SSE."
+        }
+      ]
+    },
+    {
+      "key": "usage",
+      "type": "notes",
+      "title": "THE FINE PRINT",
+      "columns": 2,
+      "items": [
+        {
+          "lead": "Ecosystem map",
+          "text": "[synthwerk](https://github.com/VelimirMueller/synthwerk)."
+        },
+        {
+          "lead": "Blueprint",
+          "text": "Shared CI, lint configs and templates: [synthwerk-blueprint](https://github.com/VelimirMueller/synthwerk-blueprint)."
+        },
+        {
+          "lead": "The old UI",
+          "text": "The tag `legacy-final` holds the old code: a Vuetify landing page with a placeholder login."
+        },
+        {
+          "lead": "S-E0 and E4",
+          "text": "S-E0 replaced it with the Synthwerk skeleton. Epic E4 Studio core is the rewrite."
+        },
+        {
+          "lead": "Renamed",
+          "text": "This repo was renamed. The old URL still redirects here."
+        },
+        {
+          "lead": "License",
+          "text": "MIT. Copyright 2026 Velimir Mueller."
+        }
+      ]
+    },
+    {
+      "key": "branching",
+      "type": "flow",
+      "title": "BRANCHING",
+      "nodes": [
+        {
+          "title": "MAIN",
+          "sub": "Deploys to dev.",
+          "hot": true
+        },
+        {
+          "title": "vX.Y.Z TAG",
+          "sub": "Deploys to stg."
+        },
+        {
+          "title": "APPROVED DIGEST",
+          "sub": "Deploys to prd."
+        }
+      ]
+    },
+    {
+      "key": "statuslog",
+      "type": "commands",
+      "title": "STATUS LOG",
+      "rows": [
+        {
+          "cmd": "[ STATUS ]",
+          "text": "Rewrite, epic E4 Studio core."
+        },
+        {
+          "cmd": "[ NOW ]",
+          "text": "Skeleton only. LICENSE and README."
+        },
+        {
+          "cmd": "[ OLD ]",
+          "text": "Tag `legacy-final` holds the Vuetify UI."
+        }
+      ]
+    },
+    {
+      "key": "honest",
+      "type": "notes",
+      "title": "TESTS AND CHANGELOG",
+      "columns": 2,
+      "items": [
+        {
+          "lead": "Tests",
+          "text": "There are no tests. There is no code to test."
+        },
+        {
+          "lead": "Changelog",
+          "text": "There is no CHANGELOG yet."
+        }
+      ]
+    },
+    {
+      "key": "links",
+      "type": "buttons",
+      "items": [
+        {
+          "label": "synthwerk",
+          "sub": "ecosystem map",
+          "href": "https://github.com/VelimirMueller/synthwerk"
+        },
+        {
+          "label": "Blueprint",
+          "sub": "shared CI, lint, templates",
+          "href": "https://github.com/VelimirMueller/synthwerk-blueprint"
+        },
+        {
+          "label": "legacy-final",
+          "sub": "old Vuetify landing page",
+          "href": "https://github.com/VelimirMueller/synthwerk-studio/tree/legacy-final"
+        },
+        {
+          "label": "License",
+          "sub": "MIT",
+          "href": "LICENSE"
+        },
+        {
+          "label": "VM. flagship",
+          "sub": "github.com/VelimirMueller",
+          "href": "https://github.com/VelimirMueller"
+        },
+        {
+          "label": "Plain text",
+          "sub": "show copyable commands"
+        }
+      ]
+    },
+    {
+      "key": "footer",
+      "type": "footer",
+      "studio": "VM. studio / flagship",
+      "text": "open source · look per vm-brand playbook · MIT © 2026 Velimir Mueller",
+      "eof": "-- EOF -- under construction. on purpose. --"
     }
-  ]
+  ],
+  "readme": {
+    "hero_alt": "SYNTHWERK-STUDIO. The part of the stack you can look at. Public site, page builder, admin, live health. Status: rewrite.",
+    "items": [
+      "lead",
+      "stats",
+      "divider:what",
+      "features",
+      "what",
+      "divider:start",
+      "start",
+      {
+        "details": "links",
+        "chip": 6,
+        "code": [
+          [
+            "bash",
+            "gh repo clone VelimirMueller/synthwerk-studio\ncd synthwerk-studio\nls\n# LICENSE  README.md — that is all. The rewrite is epic E4 Studio core."
+          ]
+        ]
+      },
+      "startnotes",
+      {
+        "buttons": "links",
+        "only": [
+          1,
+          2,
+          3
+        ]
+      },
+      "divider:how",
+      "flow",
+      "hownotes",
+      "divider:usage",
+      "usage",
+      "branching",
+      "divider:status",
+      "status",
+      "statuslog",
+      "honest",
+      {
+        "buttons": "links",
+        "only": [
+          4,
+          5
+        ]
+      },
+      "footer"
+    ]
+  }
 }
