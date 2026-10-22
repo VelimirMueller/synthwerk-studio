@@ -1,0 +1,10 @@
+# The repo holds no package manifest until the rewrite (E4) starts, so the only
+# dependencies are the pinned GitHub Actions. Add the npm ecosystem with pnpm
+# (package.json + pnpm-lock.yaml) when the app code lands.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    cooldown:
+      default-days: 7

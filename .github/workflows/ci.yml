@@ -1,0 +1,34 @@
+# The repo is a skeleton (S-E0): README, brand JSON and SVG art, no app code.
+# This job checks what exists. When the rewrite (E4) adds package.json and
+# pnpm-lock.yaml, replace it with the blueprint caller used in synthwerk-sdk:
+#   uses: VelimirMueller/synthwerk-blueprint/.github/workflows/ts-ci.yml@v1
+# Required check for the ruleset: "required".
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+jobs:
+  required:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: JSON, SVG and README links
+        run: python3 .github/scripts/check_repo.py
