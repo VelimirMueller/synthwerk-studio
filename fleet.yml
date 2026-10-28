@@ -1,0 +1,3 @@
+# fleet.yml: tier and visibility of this repo (STANDARD.md). Exceptions: docs/rollout.md.
+tier: docs-only
+visibility: public
