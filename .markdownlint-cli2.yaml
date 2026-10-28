@@ -1,0 +1,10 @@
+# markdownlint for the docs lint stage (CI-LINT-01, fleet-standard ci-contract.md).
+# The READMEs are built from <picture> art blocks (vm-brand), so inline HTML, long
+# lines and a first line that is not a heading are expected.
+config:
+  MD013: false
+  MD033: false
+  MD041: false
+ignores:
+  - "node_modules/**"
+  - "repos/**"
