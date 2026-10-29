@@ -36,6 +36,9 @@ function signIn() {
     >
       Open your profile.
     </SwCard>
+    <SwCard v-if="canViewHealth(session)" eyebrow="Pulse" title="Health" href="/health">
+      Live status and numbers of the platform.
+    </SwCard>
     <SwCard v-else eyebrow="Studio" title="Sign in">
       <p class="muted">Sign in with your Synthwerk account.</p>
       <template #footer>
