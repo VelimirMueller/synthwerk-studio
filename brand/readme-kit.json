@@ -38,8 +38,8 @@
         "$ gh repo clone VelimirMueller/synthwerk-studio",
         "$ cd synthwerk-studio",
         "$ ls",
-        "LICENSE  README.md",
-        "# nothing runs here yet. epic E4 is the rewrite."
+        "LICENSE  README.md  assets  brand  fleet.yml  vm-brand.json",
+        "# README and brand files only. no app code."
       ]
     },
     {
@@ -60,7 +60,7 @@
       "title": "WHAT WORKS TODAY",
       "rows": [
         {"label": "Legacy removal (S-E0)", "value": "done", "state": "ok"},
-        {"label": "Rewrite", "value": "epic E4 Studio core", "state": "wip"},
+        {"label": "This repo", "value": "placeholder until E4 starts", "state": "wip"},
         {"label": "Site, builder, admin", "value": "planned in E4", "state": "planned"},
         {"label": "Old Vuetify UI", "value": "tag legacy-final", "state": "off"}
       ]
@@ -206,11 +206,11 @@
       "rows": [
         {
           "cmd": "[ STATUS ]",
-          "text": "Rewrite, epic E4 Studio core."
+          "text": "Placeholder. Rewrite planned, epic E4 Studio core."
         },
         {
           "cmd": "[ NOW ]",
-          "text": "Skeleton only. LICENSE and README."
+          "text": "README and brand files. No app code."
         },
         {
           "cmd": "[ OLD ]",
@@ -293,7 +293,7 @@
         "code": [
           [
             "bash",
-            "gh repo clone VelimirMueller/synthwerk-studio\ncd synthwerk-studio\nls\n# LICENSE  README.md — that is all. The rewrite is epic E4 Studio core."
+            "gh repo clone VelimirMueller/synthwerk-studio\ncd synthwerk-studio\nls   # README and brand files only. No app code until epic E4 starts."
           ]
         ]
       },
