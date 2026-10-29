@@ -9,3 +9,6 @@ dist/
 coverage/
 bin/
 .worktrees/
+.data/
+.claude/settings.local.json
+*.tsbuildinfo

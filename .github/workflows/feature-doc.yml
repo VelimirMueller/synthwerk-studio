@@ -1,0 +1,29 @@
+# Calls the reusable feature-doc check of synthwerk-blueprint (D-16).
+# Not in the fleet taxonomy: fleet.yml lists it as a WF-FILE-02 exception.
+# The extra pull_request types run the check again after a label or PR body edit.
+name: feature-doc
+
+on:
+  pull_request:
+    branches: [develop, main]
+    types: [opened, synchronize, reopened, ready_for_review, edited, labeled, unlabeled]
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: feature-doc-${{ github.event.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  feature-doc:
+    if: ${{ !github.event.pull_request.draft }}
+    permissions:
+      contents: read
+    uses: VelimirMueller/synthwerk-blueprint/.github/workflows/feature-doc.yml@v1
+    with:
+      # Nuxt 4: pages and composables in app/, the BFF in server/.
+      source-globs: "app/**,server/**,shared/**"

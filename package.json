@@ -1,0 +1,37 @@
+{
+  "name": "synthwerk-studio",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.15.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "nuxt build",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "lint": "biome ci .",
+    "format": "biome check --write .",
+    "typecheck": "nuxt typecheck",
+    "test": "vitest run",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+  },
+  "dependencies": {
+    "@synthwerk/tokens": "file:vendor/synthwerk-tokens-0.3.0.tgz",
+    "@synthwerk/ui-vue": "file:vendor/synthwerk-ui-vue-0.1.0.tgz",
+    "h3": "1.15.11",
+    "jose": "6.2.12",
+    "nuxt": "4.6.3",
+    "vue": "3.5.44",
+    "vue-router": "5.4.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@types/node": "24.19.1",
+    "@vitest/coverage-v8": "5.0.5",
+    "typescript": "6.0.3",
+    "vitest": "5.0.5",
+    "vue-tsc": "3.3.13"
+  }
+}

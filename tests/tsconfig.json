@@ -1,0 +1,5 @@
+{
+  "extends": "../.nuxt/tsconfig.server.json",
+  "compilerOptions": { "types": ["node"] },
+  "include": ["./**/*.ts", "../server/lib/**/*.ts", "../vitest.config.ts"]
+}

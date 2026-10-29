@@ -1,0 +1,3 @@
+# pnpm 10+ runs no dependency build script unless it is listed here.
+allowBuilds:
+  esbuild: true

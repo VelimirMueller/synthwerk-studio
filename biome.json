@@ -1,0 +1,45 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": {
+    "ignoreUnknown": true,
+    "includes": ["**", "!!assets", "!!brand", "!!vendor", "!!**/*.svg"]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "asNeeded",
+      "trailingCommas": "none",
+      "bracketSpacing": true
+    }
+  },
+  "html": {
+    "experimentalFullSupportEnabled": true,
+    "formatter": { "enabled": true }
+  },
+  "linter": {
+    "enabled": true,
+    "domains": { "vue": "recommended" },
+    "rules": {
+      "recommended": true,
+      "style": {
+        "useImportType": "error",
+        "useBlockStatements": "off",
+        "useVueMultiWordComponentNames": "off",
+        "useVueHyphenatedAttributes": "error",
+        "noVueOptionsApi": "error"
+      },
+      "suspicious": { "noExplicitAny": "off" }
+    }
+  },
+  "assist": {
+    "enabled": true,
+    "actions": { "source": { "organizeImports": "on" } }
+  }
+}

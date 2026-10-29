@@ -1,3 +1,16 @@
 # fleet.yml: tier and visibility of this repo (STANDARD.md). Exceptions: docs/rollout.md.
-tier: docs-only
+# library until the studio has its first environment (no deploy target yet, synthwerk#93).
+# Then tier deploys, with deploy.yml and promote.yml (CI-PROMOTE-01 allows no exception).
+tier: library
 visibility: public
+
+exceptions:
+  - rule: WF-FILE-02
+    value: [feature-doc.yml]
+    reason: fleet-workflows has no feature-doc stage; the blueprint check keeps docs/features in step with the code (D-16).
+  - rule: GOV-REPO-01
+    value: default-branch-main
+    reason: The default branch stays main until the control repo creates develop and stage (fleet-standard#7).
+  - rule: GOV-RS-04
+    value: not-created-yet
+    reason: stage does not exist yet; the control repo creates the rulesets (fleet-standard#7).
