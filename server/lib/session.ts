@@ -4,11 +4,15 @@ import { createHash, timingSafeEqual } from 'node:crypto'
 import type { StudioIdentity } from './claims'
 import type { TokenSet } from './oidc'
 
-/** The part of an unstorage Storage the BFF needs. */
+/**
+ * The part of an unstorage Storage the BFF needs. `ttl` (seconds) expires the entry in drivers
+ * that support it (Redis); the sweep in AuthService removes it in the others (memory).
+ */
 export interface KeyValueStore {
   getItem(key: string): Promise<unknown>
-  setItem(key: string, value: unknown): Promise<void>
+  setItem(key: string, value: unknown, opts?: { ttl?: number }): Promise<void>
   removeItem(key: string): Promise<void>
+  getKeys(base?: string): Promise<string[]>
 }
 
 export interface SessionRecord {
@@ -34,6 +38,10 @@ export interface LoginTransaction {
 export const SESSION_COOKIE = '__Host-sw_session'
 export const LOGIN_COOKIE = '__Host-sw_login'
 export const LOGIN_TTL_SECONDS = 600
+/** Most open login transactions at one time. A new login above it is refused. */
+export const MAX_PENDING_LOGINS = 1000
+/** Least time between two sweeps of expired entries. */
+export const SWEEP_INTERVAL_SECONDS = 60
 
 const digest = (id: string): string => createHash('sha256').update(id).digest('base64url')
 

@@ -19,9 +19,11 @@ import {
   LOGIN_TTL_SECONDS,
   type LoginTransaction,
   loginKey,
+  MAX_PENDING_LOGINS,
   publicSession,
   SESSION_COOKIE,
   type SessionRecord,
+  SWEEP_INTERVAL_SECONDS,
   safeEqual,
   safeReturnTo,
   sessionKey
@@ -32,7 +34,8 @@ export const SIGN_IN_ERRORS = [
   'access_denied',
   'mfa_required',
   'login_expired',
-  'login_failed'
+  'login_failed',
+  'login_busy'
 ] as const
 export type SignInError = (typeof SIGN_IN_ERRORS)[number]
 
@@ -47,11 +50,15 @@ export interface AuthDeps {
   oidc: OidcClient
   now?: () => number
   log?: (level: 'warn' | 'error', message: string) => void
+  /** Cap of open login transactions. Default MAX_PENDING_LOGINS. */
+  maxPendingLogins?: number
 }
 
 export class AuthService {
   private readonly now: () => number
   private readonly refreshing = new Map<string, Promise<SessionRecord | null>>()
+  private lastSweep = Number.NEGATIVE_INFINITY
+  private sweeping?: Promise<void>
 
   constructor(private readonly deps: AuthDeps) {
     this.now = deps.now ?? Date.now
@@ -81,6 +88,14 @@ export class AuthService {
 
   /** GET /api/auth/login: starts the code flow with PKCE, state and nonce. */
   async login(event: H3Event) {
+    // Bound the store: expired entries go, and open logins have a cap (anonymous route).
+    await this.sweep()
+    if ((await this.deps.store.getKeys('login')).length >= this.maxPendingLogins) {
+      await this.sweep(true)
+      if ((await this.deps.store.getKeys('login')).length >= this.maxPendingLogins) {
+        return this.fail(event, 'login_busy', 'too many open login transactions')
+      }
+    }
     const txId = randomToken()
     const tx: LoginTransaction = {
       state: randomToken(),
@@ -90,7 +105,7 @@ export class AuthService {
       expiresAt: this.seconds() + LOGIN_TTL_SECONDS
     }
     const url = await this.deps.oidc.authorizeUrl({ ...tx, scope: studioScope(this.config) })
-    await this.deps.store.setItem(loginKey(txId), tx)
+    await this.deps.store.setItem(loginKey(txId), tx, { ttl: LOGIN_TTL_SECONDS })
     this.cookie(event, LOGIN_COOKIE, txId, LOGIN_TTL_SECONDS)
     return sendRedirect(event, url, 302)
   }
@@ -147,7 +162,9 @@ export class AuthService {
         createdAt,
         expiresAt: createdAt + this.config.sessionMaxAgeSeconds
       }
-      await this.deps.store.setItem(sessionKey(sessionId), record)
+      await this.deps.store.setItem(sessionKey(sessionId), record, {
+        ttl: this.config.sessionMaxAgeSeconds
+      })
       // A fresh id on every sign-in: an id set before the sign-in never becomes a session.
       const old = getCookie(event, SESSION_COOKIE)
       if (old) await this.deps.store.removeItem(sessionKey(old))
@@ -159,6 +176,34 @@ export class AuthService {
         err instanceof OidcError && err.code === 'mfa_required' ? 'mfa_required' : 'login_failed'
       return this.fail(event, code, describe(err))
     }
+  }
+
+  private get maxPendingLogins(): number {
+    return this.deps.maxPendingLogins ?? MAX_PENDING_LOGINS
+  }
+
+  /**
+   * Removes expired login transactions and sessions. Runs at most once per
+   * SWEEP_INTERVAL_SECONDS unless forced; parallel callers share one run.
+   */
+  async sweep(force = false): Promise<void> {
+    if (this.sweeping) return this.sweeping
+    const now = this.seconds()
+    if (!force && now - this.lastSweep < SWEEP_INTERVAL_SECONDS) return
+    this.lastSweep = now
+    this.sweeping = (async () => {
+      for (const base of ['login', 'session']) {
+        for (const key of await this.deps.store.getKeys(base)) {
+          const entry = (await this.deps.store.getItem(key)) as { expiresAt?: unknown } | null
+          if (!entry || typeof entry.expiresAt !== 'number' || entry.expiresAt <= now) {
+            await this.deps.store.removeItem(key)
+          }
+        }
+      }
+    })().finally(() => {
+      this.sweeping = undefined
+    })
+    return this.sweeping
   }
 
   private async takeLogin(txId: string): Promise<LoginTransaction | null> {
@@ -229,7 +274,9 @@ export class AuthService {
             : {})
         }
       }
-      await this.deps.store.setItem(key, next)
+      await this.deps.store.setItem(key, next, {
+        ttl: Math.max(1, next.expiresAt - this.seconds())
+      })
       return next
     } catch (err) {
       this.deps.log?.('warn', `session refresh failed: ${describe(err)}`)

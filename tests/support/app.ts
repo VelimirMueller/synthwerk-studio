@@ -14,7 +14,13 @@ export class MemoryStore implements KeyValueStore {
   async getItem(key: string) {
     return this.data.get(key) ?? null
   }
-  async setItem(key: string, value: unknown) {
+  /** The ttl of the last write per key (seconds), to check what a TTL driver would get. */
+  readonly ttls = new Map<string, number | undefined>()
+  async getKeys(base = '') {
+    return [...this.data.keys()].filter((k) => !base || k.startsWith(`${base}:`))
+  }
+  async setItem(key: string, value: unknown, opts?: { ttl?: number }) {
+    this.ttls.set(key, opts?.ttl)
     // Like a real store: a copy, not the same object.
     this.data.set(key, structuredClone(value))
   }
@@ -32,7 +38,11 @@ export interface Harness {
   handle: (request: Request) => Promise<Response>
 }
 
-export function buildApp(provider: MockProvider, overrides: Record<string, unknown> = {}): Harness {
+export function buildApp(
+  provider: MockProvider,
+  overrides: Record<string, unknown> = {},
+  maxPendingLogins?: number
+): Harness {
   const config = readAuthConfig({
     oidc: {
       issuer: provider.issuer,
@@ -54,7 +64,8 @@ export function buildApp(provider: MockProvider, overrides: Record<string, unkno
     store,
     oidc: new OidcClient(config, now),
     now,
-    log: (level, message) => logs.push(`${level}: ${message}`)
+    log: (level, message) => logs.push(`${level}: ${message}`),
+    ...(maxPendingLogins ? { maxPendingLogins } : {})
   })
   const app = createApp()
   app.use(

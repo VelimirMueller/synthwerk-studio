@@ -359,3 +359,74 @@ describe('logout and CSRF', () => {
     expect(res.status).toBe(401)
   })
 })
+
+describe('store bounds', () => {
+  const keys = (base: string) =>
+    [...harness.store.data.keys()].filter((k) => k.startsWith(`${base}:`))
+
+  it('setItem - login and session - pass the TTL for drivers that expire entries', async () => {
+    await signIn(browser, provider)
+    const session = keys('session')[0] ?? ''
+    expect(harness.store.ttls.get(session)).toBe(3600)
+    await browser.fetch('/api/auth/login')
+    const login = keys('login')[0] ?? ''
+    expect(harness.store.ttls.get(login)).toBe(600)
+  })
+
+  it('sweep - expired login transaction - is removed by the next login and its callback is refused', async () => {
+    const old = await browser.fetch('/api/auth/login')
+    const { code, state } = provider.issueCode(old.headers.get('location') ?? '')
+    const oldKey = keys('login')[0]
+    harness.clock.now += 601_000
+    await new Browser(harness).fetch('/api/auth/login')
+    expect(keys('login')).toHaveLength(1)
+    expect(keys('login')).not.toContain(oldKey)
+    const res = await browser.fetch(`/api/auth/callback?code=${code}&state=${state}`)
+    expect(res.headers.get('location')).toBe('/?error=login_expired')
+  })
+
+  it('sweep - session past its end - is removed', async () => {
+    await signIn(browser, provider)
+    expect(keys('session')).toHaveLength(1)
+    harness.clock.now += 3_601_000
+    await new Browser(harness).fetch('/api/auth/login')
+    expect(keys('session')).toHaveLength(0)
+  })
+
+  it('sweep - within the interval - runs once; forced - runs again', async () => {
+    await browser.fetch('/api/auth/login')
+    harness.clock.now += 601_000
+    await browser.fetch('/api/auth/login')
+    expect(keys('login')).toHaveLength(1)
+    harness.clock.now += 601_000
+    await harness.service.sweep(true)
+    expect(keys('login')).toHaveLength(0)
+  })
+
+  it('login cap - open logins at the cap - refuses with login_busy and stores nothing', async () => {
+    harness = buildApp(provider, {}, 3)
+    for (let i = 0; i < 3; i++) await new Browser(harness).fetch('/api/auth/login')
+    const flood = new Browser(harness)
+    const res = await flood.fetch('/api/auth/login')
+    expect(res.status).toBe(302)
+    expect(res.headers.get('location')).toBe('/?error=login_busy')
+    expect(flood.cookies.size).toBe(0)
+    expect(keys('login')).toHaveLength(3)
+    expect(harness.logs.join('\n')).toContain('login_busy')
+  })
+
+  it('login cap - expired entries free the cap - the next login passes', async () => {
+    harness = buildApp(provider, {}, 3)
+    browser = new Browser(harness)
+    for (let i = 0; i < 3; i++) await new Browser(harness).fetch('/api/auth/login')
+    harness.clock.now += 30_000
+    // Interval not over, but the cap forces a sweep; nothing has expired yet.
+    expect((await browser.fetch('/api/auth/login')).headers.get('location')).toBe(
+      '/?error=login_busy'
+    )
+    harness.clock.now += 600_000
+    const res = await browser.fetch('/api/auth/login')
+    expect(res.headers.get('location')).toContain('/oauth/v2/authorize')
+    expect(keys('login')).toHaveLength(1)
+  })
+})

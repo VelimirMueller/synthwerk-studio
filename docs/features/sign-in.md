@@ -92,6 +92,8 @@ updated: 2026-10-29
 | Session store | Nitro storage `auth`, driver `memory`: one process, lost on restart. A shared driver (Redis) is needed before more than one instance runs. |
 | Refresh lock | Per process. With more than one instance, two refreshes of one session can race when Zitadel rotates the refresh token. Add a store lock with the shared driver. |
 | Login transaction | 10 minutes |
+| Open logins | 1000 at most per store (a soft bound: parallel logins can pass it by a few). A new login above the cap gets `/?error=login_busy`. |
+| Store bounds | Login and session entries are written with `ttl` (10 min, session lifetime) for drivers that expire entries (Redis). For the others, each login sweeps expired `login:` and `session:` entries, at most once per 60 s; a full cap forces a sweep. |
 | Refresh leeway | 60 s |
 | Response headers | `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`. `/api/auth/**` has `Cache-Control: no-store`. |
 
@@ -109,6 +111,7 @@ updated: 2026-10-29
 | 302 to `/?error=access_denied` | `access_denied` | The user cancelled at Zitadel |
 | 302 to `/?error=mfa_required` | `mfa_required` | Zitadel refused, or the MFA flag is on and `amr` has no `mfa` |
 | 302 to `/?error=login_failed` | `login_failed` | Code swap, token check or userinfo failed |
+| 302 to `/?error=login_busy` | `login_busy` | 1000 open login transactions; no new transaction is stored |
 | 401 | `unauthenticated` | `GET /api/auth/session` without a valid session |
 | 403 | `csrf_failed` | Unsafe request from another origin, or a wrong `x-csrf-token` |
 
