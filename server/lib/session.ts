@@ -26,6 +26,7 @@ export interface SessionRecord {
   expiresAt: number
 }
 
+/** Lives only in the sealed login cookie, never in the store. */
 export interface LoginTransaction {
   state: string
   nonce: string
@@ -36,17 +37,18 @@ export interface LoginTransaction {
 }
 
 export const SESSION_COOKIE = '__Host-sw_session'
-export const LOGIN_COOKIE = '__Host-sw_login'
+/** Sealed login transaction. `__Secure-`, not `__Host-`: it is scoped to the callback path. */
+export const LOGIN_COOKIE = '__Secure-sw_login'
+export const LOGIN_COOKIE_PATH = '/api/auth/callback'
 export const LOGIN_TTL_SECONDS = 600
-/** Most open login transactions at one time. A new login above it is refused. */
-export const MAX_PENDING_LOGINS = 1000
-/** Least time between two sweeps of expired entries. */
+/** Least time between two sweeps of expired sessions. */
 export const SWEEP_INTERVAL_SECONDS = 60
+/** The store keeps a session this long past its end, so the sweep can revoke it first. */
+export const SESSION_TTL_GRACE_SECONDS = 600
 
 const digest = (id: string): string => createHash('sha256').update(id).digest('base64url')
 
 export const sessionKey = (id: string): string => `session:${digest(id)}`
-export const loginKey = (id: string): string => `login:${digest(id)}`
 
 /** Constant-time string compare. */
 export function safeEqual(a: string, b: string): boolean {

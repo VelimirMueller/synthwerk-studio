@@ -3,6 +3,9 @@ import { hasMfa, readAmr, readRoles, toIdentity } from '../../server/lib/claims'
 import { AuthConfigError, readAuthConfig, studioScope } from '../../server/lib/config'
 import { safeEqual, safeReturnTo } from '../../server/lib/session'
 
+const SECRET = 'test-session-secret-0123456789abcdef'
+const session = { secret: SECRET }
+
 const base = {
   issuer: 'http://auth.localhost:8080/',
   clientId: 'c',
@@ -20,7 +23,7 @@ describe('readAuthConfig', () => {
   })
 
   it('defaults - derives origin and logout URI, trims the issuer, MFA off, 8 h', () => {
-    const config = readAuthConfig({ oidc: base })
+    const config = readAuthConfig({ oidc: base, session })
     expect(config.issuer).toBe('http://auth.localhost:8080')
     expect(config.appOrigin).toBe('http://localhost:3000')
     expect(config.postLogoutRedirectUri).toBe('http://localhost:3000/')
@@ -35,21 +38,32 @@ describe('readAuthConfig', () => {
     ['false', false],
     [undefined, false]
   ])('requireMfa %j - gives %j', (value, expected) => {
-    expect(readAuthConfig({ oidc: { ...base, requireMfa: value } }).requireMfa).toBe(expected)
+    expect(readAuthConfig({ oidc: { ...base, requireMfa: value }, session }).requireMfa).toBe(
+      expected
+    )
   })
 
   it('bad session lifetime - throws and names the variable', () => {
     for (const bad of ['x', '8h', 0, -5, 1.5]) {
-      expect(() => readAuthConfig({ oidc: base, session: { maxAgeSeconds: bad } })).toThrow(
-        'NUXT_SESSION_MAX_AGE_SECONDS'
-      )
+      expect(() =>
+        readAuthConfig({ oidc: base, session: { ...session, maxAgeSeconds: bad } })
+      ).toThrow('NUXT_SESSION_MAX_AGE_SECONDS')
     }
     expect(
-      readAuthConfig({ oidc: base, session: { maxAgeSeconds: '' } }).sessionMaxAgeSeconds
+      readAuthConfig({ oidc: base, session: { ...session, maxAgeSeconds: '' } })
+        .sessionMaxAgeSeconds
     ).toBe(28800)
     expect(
-      readAuthConfig({ oidc: base, session: { maxAgeSeconds: 600 } }).sessionMaxAgeSeconds
+      readAuthConfig({ oidc: base, session: { ...session, maxAgeSeconds: 600 } })
+        .sessionMaxAgeSeconds
     ).toBe(600)
+  })
+
+  it('session secret - missing or short - throws and names the variable', () => {
+    expect(() => readAuthConfig({ oidc: base })).toThrow('NUXT_SESSION_SECRET')
+    expect(() => readAuthConfig({ oidc: base, session: { secret: 'short' } })).toThrow(
+      'NUXT_SESSION_SECRET'
+    )
   })
 
   it('studioScope - no project id - leaves out the audience scope', () => {

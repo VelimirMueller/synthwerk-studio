@@ -18,7 +18,8 @@ const client = (issuer = provider.issuer, extra: Record<string, unknown> = {}) =
         clientSecret: CLIENT_SECRET,
         redirectUri: REDIRECT_URI,
         ...extra
-      }
+      },
+      session: { secret: 'test-session-secret-0123456789abcdef' }
     })
   )
 

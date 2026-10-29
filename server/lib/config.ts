@@ -14,11 +14,15 @@ export interface AuthConfig {
   requireMfa: boolean
   /** Absolute session lifetime. Refresh never extends it. */
   sessionMaxAgeSeconds: number
+  /** Key material for sealed cookies (HKDF input). At least 32 characters. */
+  sessionSecret: string
 }
 
 export interface RawAuthConfig {
-  oidc?: Partial<Record<keyof Omit<AuthConfig, 'appOrigin' | 'sessionMaxAgeSeconds'>, unknown>>
-  session?: { maxAgeSeconds?: unknown }
+  oidc?: Partial<
+    Record<keyof Omit<AuthConfig, 'appOrigin' | 'sessionMaxAgeSeconds' | 'sessionSecret'>, unknown>
+  >
+  session?: { maxAgeSeconds?: unknown; secret?: unknown }
 }
 
 export class AuthConfigError extends Error {}
@@ -35,6 +39,10 @@ export function readAuthConfig(raw: RawAuthConfig): AuthConfig {
   )
   if (missing.length > 0) {
     throw new AuthConfigError(`auth is not configured: set ${missing.map(envName).join(', ')}`)
+  }
+  const sessionSecret = text(raw.session?.secret)
+  if (sessionSecret.length < 32) {
+    throw new AuthConfigError('NUXT_SESSION_SECRET must be set, at least 32 characters')
   }
   const issuer = text(oidc.issuer).replace(/\/+$/, '')
   const redirectUri = new URL(text(oidc.redirectUri))
@@ -54,7 +62,8 @@ export function readAuthConfig(raw: RawAuthConfig): AuthConfig {
     postLogoutRedirectUri: new URL(postLogout).toString(),
     appOrigin,
     requireMfa: flag(oidc.requireMfa),
-    sessionMaxAgeSeconds: maxAge
+    sessionMaxAgeSeconds: maxAge,
+    sessionSecret
   }
 }
 

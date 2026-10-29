@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { deriveKey, seal } from '../../server/lib/seal'
 import { LOGIN_COOKIE, SESSION_COOKIE, sessionKey } from '../../server/lib/session'
 import { Browser, buildApp, type Harness, ORIGIN, signIn } from '../support/app'
 import { CLIENT_ID, MockProvider, ORG_ID, REDIRECT_URI } from '../support/provider'
@@ -55,7 +56,7 @@ describe('login', () => {
     expect(cookie).toMatch(/HttpOnly/)
     expect(cookie).toMatch(/Secure/)
     expect(cookie).toMatch(/SameSite=Lax/)
-    expect(cookie).toMatch(/Path=\//)
+    expect(cookie).toMatch(/Path=\/api\/auth\/callback/)
     expect(cookie).toMatch(/Max-Age=600/)
   })
 })
@@ -121,11 +122,49 @@ describe('callback', () => {
     expect(replay.headers.get('location')).toBe('/?error=login_expired')
   })
 
-  it('callback - login cookie present but the transaction is gone - refuses', async () => {
+  it('callback - same login cookie replayed with the used code - refuses (code is single use)', async () => {
+    const login = await browser.fetch('/api/auth/login')
+    const sealed = browser.cookies.get(LOGIN_COOKIE) ?? ''
+    const { code, state } = provider.issueCode(login.headers.get('location') ?? '')
+    await browser.fetch(`/api/auth/callback?code=${code}&state=${state}`)
+    const attacker = new Browser(harness)
+    attacker.cookies.set(LOGIN_COOKIE, sealed)
+    const replay = await attacker.fetch(`/api/auth/callback?code=${code}&state=${state}`)
+    expect(replay.headers.get('location')).toBe('/?error=login_failed')
+    expect(attacker.cookies.has(SESSION_COOKIE)).toBe(false)
+  })
+
+  it.each([
+    [
+      'one byte flipped',
+      (v: string) => `${v.slice(0, -2)}${v.at(-2) === 'A' ? 'B' : 'A'}${v.at(-1)}`
+    ],
+    ['truncated', (v: string) => v.slice(0, 10)],
+    ['not base64', () => '%%%'],
+    [
+      'sealed with another secret',
+      () => {
+        const key = deriveKey('another-secret-0123456789abcdef-xyz', 'login-transaction v1')
+        return seal(
+          key,
+          { state: 's', nonce: 'n', verifier: 'v', returnTo: '/', expiresAt: 9e9 },
+          LOGIN_COOKIE
+        )
+      }
+    ]
+  ])('callback - login cookie %s - refuses with login_expired', async (_name, tamper) => {
     const login = await browser.fetch('/api/auth/login')
     const { code, state } = provider.issueCode(login.headers.get('location') ?? '')
-    harness.store.data.clear()
+    browser.cookies.set(LOGIN_COOKIE, tamper(browser.cookies.get(LOGIN_COOKIE) ?? ''))
     const res = await browser.fetch(`/api/auth/callback?code=${code}&state=${state}`)
+    expect(res.headers.get('location')).toBe('/?error=login_expired')
+    expect(provider.tokenCalls).toHaveLength(0)
+  })
+
+  it('callback - sealed value of the wrong shape - refuses', async () => {
+    const key = deriveKey(harness.config.sessionSecret, 'login-transaction v1')
+    browser.cookies.set(LOGIN_COOKIE, seal(key, { state: 1 }, LOGIN_COOKIE))
+    const res = await browser.fetch('/api/auth/callback?code=x&state=1')
     expect(res.headers.get('location')).toBe('/?error=login_expired')
   })
 
@@ -361,72 +400,75 @@ describe('logout and CSRF', () => {
 })
 
 describe('store bounds', () => {
-  const keys = (base: string) =>
-    [...harness.store.data.keys()].filter((k) => k.startsWith(`${base}:`))
+  const keys = () => [...harness.store.data.keys()]
 
-  it('setItem - login and session - pass the TTL for drivers that expire entries', async () => {
-    await signIn(browser, provider)
-    const session = keys('session')[0] ?? ''
-    expect(harness.store.ttls.get(session)).toBe(3600)
-    await browser.fetch('/api/auth/login')
-    const login = keys('login')[0] ?? ''
-    expect(harness.store.ttls.get(login)).toBe(600)
+  it('GET /api/auth/login - many anonymous calls - write nothing to the store', async () => {
+    for (let i = 0; i < 50; i++) await new Browser(harness).fetch('/api/auth/login')
+    expect(keys()).toEqual([])
+    expect(harness.store.ttls.size).toBe(0)
   })
 
-  it('sweep - expired login transaction - is removed by the next login and its callback is refused', async () => {
-    const old = await browser.fetch('/api/auth/login')
-    const { code, state } = provider.issueCode(old.headers.get('location') ?? '')
-    const oldKey = keys('login')[0]
-    harness.clock.now += 601_000
-    await new Browser(harness).fetch('/api/auth/login')
-    expect(keys('login')).toHaveLength(1)
-    expect(keys('login')).not.toContain(oldKey)
-    const res = await browser.fetch(`/api/auth/callback?code=${code}&state=${state}`)
-    expect(res.headers.get('location')).toBe('/?error=login_expired')
+  it('session write - TTL - is the session lifetime plus the revoke grace', async () => {
+    await signIn(browser, provider)
+    expect(harness.store.ttls.get(keys()[0] ?? '')).toBe(3600 + 600)
   })
 
-  it('sweep - session past its end - is removed', async () => {
+  it('sweep - session past its end - revokes its refresh token, then removes it', async () => {
     await signIn(browser, provider)
-    expect(keys('session')).toHaveLength(1)
+    const refresh = [...provider.refreshTokens.keys()].at(-1)
     harness.clock.now += 3_601_000
-    await new Browser(harness).fetch('/api/auth/login')
-    expect(keys('session')).toHaveLength(0)
-  })
-
-  it('sweep - within the interval - runs once; forced - runs again', async () => {
-    await browser.fetch('/api/auth/login')
-    harness.clock.now += 601_000
-    await browser.fetch('/api/auth/login')
-    expect(keys('login')).toHaveLength(1)
-    harness.clock.now += 601_000
     await harness.service.sweep(true)
-    expect(keys('login')).toHaveLength(0)
+    expect(keys()).toEqual([])
+    expect(provider.revoked).toEqual([refresh])
   })
 
-  it('login cap - open logins at the cap - refuses with login_busy and stores nothing', async () => {
-    harness = buildApp(provider, {}, 3)
-    for (let i = 0; i < 3; i++) await new Browser(harness).fetch('/api/auth/login')
-    const flood = new Browser(harness)
-    const res = await flood.fetch('/api/auth/login')
-    expect(res.status).toBe(302)
-    expect(res.headers.get('location')).toBe('/?error=login_busy')
-    expect(flood.cookies.size).toBe(0)
-    expect(keys('login')).toHaveLength(3)
-    expect(harness.logs.join('\n')).toContain('login_busy')
+  it('sweep - after a new sign-in, once the interval is over - ends the old expired session', async () => {
+    harness = buildApp(provider, {}, 90)
+    await signIn(new Browser(harness), provider)
+    harness.clock.now += 91_000
+    await signIn(new Browser(harness), provider)
+    await harness.service.sweep()
+    expect(keys()).toHaveLength(1)
+    expect(provider.revoked).toHaveLength(1)
   })
 
-  it('login cap - expired entries free the cap - the next login passes', async () => {
-    harness = buildApp(provider, {}, 3)
-    browser = new Browser(harness)
-    for (let i = 0; i < 3; i++) await new Browser(harness).fetch('/api/auth/login')
-    harness.clock.now += 30_000
-    // Interval not over, but the cap forces a sweep; nothing has expired yet.
-    expect((await browser.fetch('/api/auth/login')).headers.get('location')).toBe(
-      '/?error=login_busy'
-    )
-    harness.clock.now += 600_000
-    const res = await browser.fetch('/api/auth/login')
-    expect(res.headers.get('location')).toContain('/oauth/v2/authorize')
-    expect(keys('login')).toHaveLength(1)
+  it('sweep - within the interval - does not run again', async () => {
+    harness = buildApp(provider, {}, 30)
+    await harness.service.sweep(true)
+    await signIn(new Browser(harness), provider)
+    harness.clock.now += 31_000
+    await harness.service.sweep()
+    expect(keys()).toHaveLength(1)
+    await harness.service.sweep(true)
+    expect(keys()).toHaveLength(0)
+  })
+
+  it('end - revoke throws - the session is still removed', async () => {
+    harness = buildApp(provider, {}, 30)
+    await signIn(new Browser(harness), provider)
+    harness.clock.now += 31_000
+    const oidc = (harness.service as unknown as { deps: { oidc: { revoke: () => Promise<void> } } })
+      .deps.oidc
+    oidc.revoke = async () => {
+      throw new Error('network down')
+    }
+    await harness.service.sweep(true)
+    expect(keys()).toEqual([])
+    expect(harness.logs.join('\n')).toContain('revoke failed: Error')
+  })
+
+  it('sweep - entry without expiresAt - is removed', async () => {
+    harness.store.data.set('session:broken', { nope: true })
+    await harness.service.sweep(true)
+    expect(keys()).toEqual([])
+  })
+
+  it('session read - past its end - revokes the refresh token before it removes the session', async () => {
+    provider.options = { expiresIn: 7200 }
+    await signIn(browser, provider)
+    harness.clock.now += 3_601_000
+    expect((await session()).status).toBe(401)
+    expect(provider.revoked).toHaveLength(1)
+    expect(keys()).toEqual([])
   })
 })

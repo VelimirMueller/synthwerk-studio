@@ -22,7 +22,7 @@ updated: 2026-10-29
 
 ## What it does
 
-1. `GET /api/auth/login?returnTo=/me` makes state, nonce and a PKCE verifier. It stores them on the server for 10 minutes and redirects to Zitadel `authorize`.
+1. `GET /api/auth/login?returnTo=/me` makes state, nonce and a PKCE verifier. It seals them into a login cookie (10 minutes) and redirects to Zitadel `authorize`. It writes nothing to the store.
 2. Zitadel shows login UI v2. The user signs in with a passkey or a password and a second factor.
 3. `GET /api/auth/callback` checks the login cookie and `state`, swaps the code (client secret and PKCE verifier) and checks the tokens.
 4. The BFF stores the tokens and the identity in the session store, sets the session cookie and redirects to `returnTo`.
@@ -35,7 +35,7 @@ updated: 2026-10-29
 | Access token | JWT like kit/auth: signature, `iss`, `aud` has the client id, `exp`. Org, roles and `amr` come from it. |
 | Subject | ID token, access token and userinfo name the same `sub` |
 | `returnTo` | Same-origin path only. `//host`, `/\host`, URLs and control characters give `/me`. |
-| Login transaction | One use. Older than 10 minutes = `login_expired`. |
+| Login transaction | Sealed cookie `__Secure-sw_login`: AES-256-GCM, key from `NUXT_SESSION_SECRET` by HKDF-SHA256, cookie name as AAD. `HttpOnly; Secure; SameSite=Lax; Path=/api/auth/callback`, 10 minutes. Tampered, foreign or older = `login_expired`. The callback clears it. A replayed code fails at Zitadel. |
 | Session | Absolute end after `NUXT_SESSION_MAX_AGE_SECONDS` (8 h). Refresh does not extend it. |
 
 ## Session and CSRF
@@ -74,6 +74,7 @@ updated: 2026-10-29
 | `NUXT_OIDC_POST_LOGOUT_REDIRECT_URI` | `http://localhost:3000/` | Must match the Zitadel app exactly |
 | `NUXT_OIDC_REQUIRE_MFA` | `false` | See MFA flag |
 | `NUXT_SESSION_MAX_AGE_SECONDS` | `28800` | Absolute session lifetime |
+| `NUXT_SESSION_SECRET` | none | Key material for the sealed login cookie, 32 characters or more. Env only. A change drops open logins only. |
 
 - Scope: `openid profile email offline_access urn:zitadel:iam:org:project:id:<project>:aud urn:zitadel:iam:org:projects:roles urn:zitadel:iam:user:resourceowner`.
 - A missing required variable stops every auth route with a message that names it.
@@ -91,9 +92,9 @@ updated: 2026-10-29
 |---|---|
 | Session store | Nitro storage `auth`, driver `memory`: one process, lost on restart. A shared driver (Redis) is needed before more than one instance runs. |
 | Refresh lock | Per process. With more than one instance, two refreshes of one session can race when Zitadel rotates the refresh token. Add a store lock with the shared driver. |
-| Login transaction | 10 minutes |
-| Open logins | 1000 at most per store (a soft bound: parallel logins can pass it by a few). A new login above the cap gets `/?error=login_busy`. |
-| Store bounds | Login and session entries are written with `ttl` (10 min, session lifetime) for drivers that expire entries (Redis). For the others, each login sweeps expired `login:` and `session:` entries, at most once per 60 s; a full cap forces a sweep. |
+| Login transaction | 10 minutes, in the sealed cookie only. `/login` writes nothing to the store, so anonymous calls cannot fill it. |
+| Store bounds | Only signed-in sessions are stored. Each write has `ttl` = remaining life + 10 min (for drivers that expire entries, such as Redis). The grace gives the sweep time to revoke first. |
+| Sweep | After each new session, at most once per 60 s: every session past its end gets its refresh token revoked, then is removed. A read of an expired session does the same. |
 | Refresh leeway | 60 s |
 | Response headers | `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`. `/api/auth/**` has `Cache-Control: no-store`. |
 
@@ -107,11 +108,10 @@ updated: 2026-10-29
 
 | Status | Code | Cause |
 |---|---|---|
-| 302 to `/?error=login_expired` | `login_expired` | No or old login transaction, `state` mismatch, callback replay |
+| 302 to `/?error=login_expired` | `login_expired` | No, old, tampered or foreign login cookie, `state` mismatch, callback without the cookie |
 | 302 to `/?error=access_denied` | `access_denied` | The user cancelled at Zitadel |
 | 302 to `/?error=mfa_required` | `mfa_required` | Zitadel refused, or the MFA flag is on and `amr` has no `mfa` |
 | 302 to `/?error=login_failed` | `login_failed` | Code swap, token check or userinfo failed |
-| 302 to `/?error=login_busy` | `login_busy` | 1000 open login transactions; no new transaction is stored |
 | 401 | `unauthenticated` | `GET /api/auth/session` without a valid session |
 | 403 | `csrf_failed` | Unsafe request from another origin, or a wrong `x-csrf-token` |
 

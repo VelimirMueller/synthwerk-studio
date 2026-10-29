@@ -8,6 +8,7 @@ import type { KeyValueStore } from '../../server/lib/session'
 import { CLIENT_ID, CLIENT_SECRET, type MockProvider, REDIRECT_URI } from './provider'
 
 export const ORIGIN = 'http://localhost:3000'
+export const SESSION_SECRET = 'test-session-secret-0123456789abcdef'
 
 export class MemoryStore implements KeyValueStore {
   readonly data = new Map<string, unknown>()
@@ -41,7 +42,7 @@ export interface Harness {
 export function buildApp(
   provider: MockProvider,
   overrides: Record<string, unknown> = {},
-  maxPendingLogins?: number
+  maxAgeSeconds = 3600
 ): Harness {
   const config = readAuthConfig({
     oidc: {
@@ -53,7 +54,7 @@ export function buildApp(
       postLogoutRedirectUri: `${ORIGIN}/`,
       ...overrides
     },
-    session: { maxAgeSeconds: 3600 }
+    session: { maxAgeSeconds, secret: SESSION_SECRET }
   })
   const store = new MemoryStore()
   const logs: string[] = []
@@ -64,8 +65,7 @@ export function buildApp(
     store,
     oidc: new OidcClient(config, now),
     now,
-    log: (level, message) => logs.push(`${level}: ${message}`),
-    ...(maxPendingLogins ? { maxPendingLogins } : {})
+    log: (level, message) => logs.push(`${level}: ${message}`)
   })
   const app = createApp()
   app.use(

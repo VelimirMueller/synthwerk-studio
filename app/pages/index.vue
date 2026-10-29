@@ -10,8 +10,7 @@ const messages: Record<string, string> = {
   access_denied: 'The sign-in was cancelled.',
   mfa_required: 'This sign-in had no second factor. Sign in with a passkey or a second factor.',
   login_expired: 'The sign-in took too long or was opened twice. Try again.',
-  login_failed: 'The sign-in failed. Try again.',
-  login_busy: 'Too many sign-ins are open right now. Try again in a few minutes.'
+  login_failed: 'The sign-in failed. Try again.'
 }
 const error = computed(() => {
   const code = route.query.error

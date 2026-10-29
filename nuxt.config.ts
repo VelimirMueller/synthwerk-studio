@@ -23,7 +23,9 @@ export default defineNuxtConfig({
       requireMfa: false
     },
     session: {
-      maxAgeSeconds: 28800
+      maxAgeSeconds: 28800,
+      // Key material for the sealed login cookie. Env only: NUXT_SESSION_SECRET.
+      secret: ''
     }
   },
   nitro: {

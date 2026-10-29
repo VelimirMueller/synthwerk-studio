@@ -13,15 +13,16 @@ import {
 import { hasMfa, toIdentity } from './claims'
 import { type AuthConfig, studioScope } from './config'
 import { type OidcClient, OidcError, randomToken, type TokenSet } from './oidc'
+import { deriveKey, seal, unseal } from './seal'
 import {
   type KeyValueStore,
   LOGIN_COOKIE,
+  LOGIN_COOKIE_PATH,
   LOGIN_TTL_SECONDS,
   type LoginTransaction,
-  loginKey,
-  MAX_PENDING_LOGINS,
   publicSession,
   SESSION_COOKIE,
+  SESSION_TTL_GRACE_SECONDS,
   type SessionRecord,
   SWEEP_INTERVAL_SECONDS,
   safeEqual,
@@ -34,8 +35,7 @@ export const SIGN_IN_ERRORS = [
   'access_denied',
   'mfa_required',
   'login_expired',
-  'login_failed',
-  'login_busy'
+  'login_failed'
 ] as const
 export type SignInError = (typeof SIGN_IN_ERRORS)[number]
 
@@ -50,18 +50,18 @@ export interface AuthDeps {
   oidc: OidcClient
   now?: () => number
   log?: (level: 'warn' | 'error', message: string) => void
-  /** Cap of open login transactions. Default MAX_PENDING_LOGINS. */
-  maxPendingLogins?: number
 }
 
 export class AuthService {
   private readonly now: () => number
+  private readonly loginKey: Buffer
   private readonly refreshing = new Map<string, Promise<SessionRecord | null>>()
   private lastSweep = Number.NEGATIVE_INFINITY
   private sweeping?: Promise<void>
 
   constructor(private readonly deps: AuthDeps) {
     this.now = deps.now ?? Date.now
+    this.loginKey = deriveKey(deps.config.sessionSecret, 'login-transaction v1')
   }
 
   private get config() {
@@ -72,31 +72,24 @@ export class AuthService {
     return Math.floor(this.now() / 1000)
   }
 
-  private cookie(event: H3Event, name: string, value: string, maxAge: number) {
-    setCookie(event, name, value, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'lax',
-      path: '/',
-      maxAge
-    })
+  private cookie(event: H3Event, name: string, value: string, maxAge: number, path = '/') {
+    setCookie(event, name, value, { httpOnly: true, secure: true, sameSite: 'lax', path, maxAge })
   }
 
-  private clear(event: H3Event, name: string) {
-    deleteCookie(event, name, { httpOnly: true, secure: true, sameSite: 'lax', path: '/' })
+  private clear(event: H3Event, name: string, path = '/') {
+    deleteCookie(event, name, { httpOnly: true, secure: true, sameSite: 'lax', path })
   }
 
-  /** GET /api/auth/login: starts the code flow with PKCE, state and nonce. */
+  /** Store TTL for a session: its remaining life plus a grace for the revoke in the sweep. */
+  private sessionTtl(record: SessionRecord): number {
+    return Math.max(1, record.expiresAt - this.seconds()) + SESSION_TTL_GRACE_SECONDS
+  }
+
+  /**
+   * GET /api/auth/login: starts the code flow with PKCE, state and nonce. The transaction
+   * goes into a sealed cookie (AES-256-GCM), so this anonymous route writes nothing to the store.
+   */
   async login(event: H3Event) {
-    // Bound the store: expired entries go, and open logins have a cap (anonymous route).
-    await this.sweep()
-    if ((await this.deps.store.getKeys('login')).length >= this.maxPendingLogins) {
-      await this.sweep(true)
-      if ((await this.deps.store.getKeys('login')).length >= this.maxPendingLogins) {
-        return this.fail(event, 'login_busy', 'too many open login transactions')
-      }
-    }
-    const txId = randomToken()
     const tx: LoginTransaction = {
       state: randomToken(),
       nonce: randomToken(),
@@ -105,19 +98,21 @@ export class AuthService {
       expiresAt: this.seconds() + LOGIN_TTL_SECONDS
     }
     const url = await this.deps.oidc.authorizeUrl({ ...tx, scope: studioScope(this.config) })
-    await this.deps.store.setItem(loginKey(txId), tx, { ttl: LOGIN_TTL_SECONDS })
-    this.cookie(event, LOGIN_COOKIE, txId, LOGIN_TTL_SECONDS)
+    const sealed = seal(this.loginKey, tx, LOGIN_COOKIE)
+    this.cookie(event, LOGIN_COOKIE, sealed, LOGIN_TTL_SECONDS, LOGIN_COOKIE_PATH)
     return sendRedirect(event, url, 302)
   }
 
   /** GET /api/auth/callback: checks state, swaps the code, checks the tokens, opens a session. */
   async callback(event: H3Event) {
     const query = getQuery(event)
-    const txId = getCookie(event, LOGIN_COOKIE)
-    this.clear(event, LOGIN_COOKIE)
-    const tx = txId ? await this.takeLogin(txId) : null
-    if (!tx || tx.expiresAt < this.seconds())
-      return this.fail(event, 'login_expired', 'no login transaction')
+    const sealed = getCookie(event, LOGIN_COOKIE)
+    // One use: the cookie goes with this response. A replay of the code fails at Zitadel.
+    this.clear(event, LOGIN_COOKIE, LOGIN_COOKIE_PATH)
+    const tx = sealed ? readLogin(unseal(this.loginKey, sealed, LOGIN_COOKIE)) : null
+    if (!tx || tx.expiresAt < this.seconds()) {
+      return this.fail(event, 'login_expired', 'no valid login transaction')
+    }
     if (typeof query.state !== 'string' || !safeEqual(query.state, tx.state)) {
       return this.fail(event, 'login_expired', 'state mismatch')
     }
@@ -162,9 +157,8 @@ export class AuthService {
         createdAt,
         expiresAt: createdAt + this.config.sessionMaxAgeSeconds
       }
-      await this.deps.store.setItem(sessionKey(sessionId), record, {
-        ttl: this.config.sessionMaxAgeSeconds
-      })
+      await this.deps.store.setItem(sessionKey(sessionId), record, { ttl: this.sessionTtl(record) })
+      void this.sweep()
       // A fresh id on every sign-in: an id set before the sign-in never becomes a session.
       const old = getCookie(event, SESSION_COOKIE)
       if (old) await this.deps.store.removeItem(sessionKey(old))
@@ -178,13 +172,9 @@ export class AuthService {
     }
   }
 
-  private get maxPendingLogins(): number {
-    return this.deps.maxPendingLogins ?? MAX_PENDING_LOGINS
-  }
-
   /**
-   * Removes expired login transactions and sessions. Runs at most once per
-   * SWEEP_INTERVAL_SECONDS unless forced; parallel callers share one run.
+   * Ends sessions past their end: revokes the refresh token, then removes the entry. Runs at
+   * most once per SWEEP_INTERVAL_SECONDS (after each new session) unless forced.
    */
   async sweep(force = false): Promise<void> {
     if (this.sweeping) return this.sweeping
@@ -192,26 +182,17 @@ export class AuthService {
     if (!force && now - this.lastSweep < SWEEP_INTERVAL_SECONDS) return
     this.lastSweep = now
     this.sweeping = (async () => {
-      for (const base of ['login', 'session']) {
-        for (const key of await this.deps.store.getKeys(base)) {
-          const entry = (await this.deps.store.getItem(key)) as { expiresAt?: unknown } | null
-          if (!entry || typeof entry.expiresAt !== 'number' || entry.expiresAt <= now) {
-            await this.deps.store.removeItem(key)
-          }
-        }
+      for (const key of await this.deps.store.getKeys('session')) {
+        const record = (await this.deps.store.getItem(key)) as SessionRecord | null
+        if (!record || typeof record.expiresAt !== 'number') await this.deps.store.removeItem(key)
+        else if (record.expiresAt <= now) await this.end(key, record)
       }
-    })().finally(() => {
-      this.sweeping = undefined
-    })
+    })()
+      .catch((err) => this.deps.log?.('warn', `session sweep failed: ${describe(err)}`))
+      .finally(() => {
+        this.sweeping = undefined
+      })
     return this.sweeping
-  }
-
-  private async takeLogin(txId: string): Promise<LoginTransaction | null> {
-    const key = loginKey(txId)
-    const tx = (await this.deps.store.getItem(key)) as LoginTransaction | null
-    // One use only: a replayed callback finds nothing.
-    await this.deps.store.removeItem(key)
-    return tx
   }
 
   private fail(event: H3Event, code: SignInError, reason: string) {
@@ -285,10 +266,17 @@ export class AuthService {
     }
   }
 
+  /** Revokes the refresh token (best effort), then removes the session, also when revoke fails. */
   private async end(key: string, record: SessionRecord) {
-    await this.deps.store.removeItem(key)
-    if (record.tokens.refreshToken)
-      await this.deps.oidc.revoke(record.tokens.refreshToken, 'refresh_token')
+    try {
+      if (record.tokens.refreshToken) {
+        await this.deps.oidc.revoke(record.tokens.refreshToken, 'refresh_token')
+      }
+    } catch (err) {
+      this.deps.log?.('warn', `revoke failed: ${describe(err)}`)
+    } finally {
+      await this.deps.store.removeItem(key)
+    }
   }
 
   /** GET /api/auth/session: who is signed in. 401 without a session. */
@@ -366,6 +354,16 @@ export class AuthService {
       })
     }
   }
+}
+
+/** Checks the shape of an unsealed login transaction. */
+function readLogin(value: unknown): LoginTransaction | null {
+  if (!value || typeof value !== 'object') return null
+  const tx = value as Record<string, unknown>
+  const ok =
+    ['state', 'nonce', 'verifier', 'returnTo'].every((k) => typeof tx[k] === 'string') &&
+    typeof tx.expiresAt === 'number'
+  return ok ? (tx as unknown as LoginTransaction) : null
 }
 
 /** A log line without token material: the error class and its message only. */
