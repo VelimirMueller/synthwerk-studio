@@ -413,6 +413,13 @@ describe('store bounds', () => {
     expect(harness.store.ttls.get(keys()[0] ?? '')).toBe(3600 + 600)
   })
 
+  it('session write after refresh - TTL - keeps the revoke grace', async () => {
+    await signIn(browser, provider)
+    harness.clock.now += 250_000
+    expect((await session()).status).toBe(200)
+    expect(harness.store.ttls.get(keys()[0] ?? '')).toBe(3600 - 250 + 600)
+  })
+
   it('sweep - session past its end - revokes its refresh token, then removes it', async () => {
     await signIn(browser, provider)
     const refresh = [...provider.refreshTokens.keys()].at(-1)

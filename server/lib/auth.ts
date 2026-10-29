@@ -255,9 +255,7 @@ export class AuthService {
             : {})
         }
       }
-      await this.deps.store.setItem(key, next, {
-        ttl: Math.max(1, next.expiresAt - this.seconds())
-      })
+      await this.deps.store.setItem(key, next, { ttl: this.sessionTtl(next) })
       return next
     } catch (err) {
       this.deps.log?.('warn', `session refresh failed: ${describe(err)}`)
