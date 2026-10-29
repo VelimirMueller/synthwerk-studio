@@ -1,7 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { deriveKey, seal } from '../../server/lib/seal'
-import { LOGIN_COOKIE, SESSION_COOKIE, sessionKey } from '../../server/lib/session'
-import { Browser, buildApp, type Harness, ORIGIN, signIn } from '../support/app'
+import {
+  LOGIN_COOKIE,
+  LOGIN_SEAL_PURPOSE,
+  SESSION_COOKIE,
+  sessionKey
+} from '../../server/lib/session'
+import { Browser, buildApp, type Harness, ORIGIN, SESSION_SECRET, signIn } from '../support/app'
 import { CLIENT_ID, MockProvider, ORG_ID, REDIRECT_URI } from '../support/provider'
 
 const provider = new MockProvider()
@@ -24,6 +29,9 @@ beforeEach(() => {
 })
 
 const sameOrigin = { origin: ORIGIN }
+
+/** A well-formed login transaction (only the seal decides). */
+const tx = () => ({ state: 's', nonce: 'n', verifier: 'v', returnTo: '/', expiresAt: 9e9 })
 
 async function session(b = browser) {
   return b.fetch('/api/auth/session')
@@ -56,7 +64,8 @@ describe('login', () => {
     expect(cookie).toMatch(/HttpOnly/)
     expect(cookie).toMatch(/Secure/)
     expect(cookie).toMatch(/SameSite=Lax/)
-    expect(cookie).toMatch(/Path=\/api\/auth\/callback/)
+    expect(cookie).toMatch(/Path=\/;/)
+    expect(cookie).not.toMatch(/Domain=/i)
     expect(cookie).toMatch(/Max-Age=600/)
   })
 })
@@ -144,13 +153,21 @@ describe('callback', () => {
     [
       'sealed with another secret',
       () => {
-        const key = deriveKey('another-secret-0123456789abcdef-xyz', 'login-transaction v1')
-        return seal(
-          key,
-          { state: 's', nonce: 'n', verifier: 'v', returnTo: '/', expiresAt: 9e9 },
-          LOGIN_COOKIE
-        )
+        const key = deriveKey('another-secret-0123456789abcdef-xyz', LOGIN_SEAL_PURPOSE)
+        return seal(key, tx(), LOGIN_SEAL_PURPOSE)
       }
+    ],
+    [
+      'sealed for another purpose (same secret, other key and AAD)',
+      () => seal(deriveKey(SESSION_SECRET, 'session'), tx(), 'session')
+    ],
+    [
+      'sealed with the login key but another AAD',
+      () => seal(deriveKey(SESSION_SECRET, LOGIN_SEAL_PURPOSE), tx(), 'session')
+    ],
+    [
+      'sealed with the login AAD but a key for another purpose',
+      () => seal(deriveKey(SESSION_SECRET, 'session'), tx(), LOGIN_SEAL_PURPOSE)
     ]
   ])('callback - login cookie %s - refuses with login_expired', async (_name, tamper) => {
     const login = await browser.fetch('/api/auth/login')
@@ -162,8 +179,8 @@ describe('callback', () => {
   })
 
   it('callback - sealed value of the wrong shape - refuses', async () => {
-    const key = deriveKey(harness.config.sessionSecret, 'login-transaction v1')
-    browser.cookies.set(LOGIN_COOKIE, seal(key, { state: 1 }, LOGIN_COOKIE))
+    const key = deriveKey(harness.config.sessionSecret, LOGIN_SEAL_PURPOSE)
+    browser.cookies.set(LOGIN_COOKIE, seal(key, { state: 1 }, LOGIN_SEAL_PURPOSE))
     const res = await browser.fetch('/api/auth/callback?code=x&state=1')
     expect(res.headers.get('location')).toBe('/?error=login_expired')
   })

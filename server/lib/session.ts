@@ -37,9 +37,10 @@ export interface LoginTransaction {
 }
 
 export const SESSION_COOKIE = '__Host-sw_session'
-/** Sealed login transaction. `__Secure-`, not `__Host-`: it is scoped to the callback path. */
-export const LOGIN_COOKIE = '__Secure-sw_login'
-export const LOGIN_COOKIE_PATH = '/api/auth/callback'
+/** Sealed login transaction. `__Host-` (Path=/, no Domain): no sibling subdomain can set it. */
+export const LOGIN_COOKIE = '__Host-sw_login'
+/** Purpose bound into every login seal (key derivation and AAD). No other seal uses it. */
+export const LOGIN_SEAL_PURPOSE = 'login-tx'
 export const LOGIN_TTL_SECONDS = 600
 /** Least time between two sweeps of expired sessions. */
 export const SWEEP_INTERVAL_SECONDS = 60

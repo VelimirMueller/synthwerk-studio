@@ -35,7 +35,7 @@ updated: 2026-10-29
 | Access token | JWT like kit/auth: signature, `iss`, `aud` has the client id, `exp`. Org, roles and `amr` come from it. |
 | Subject | ID token, access token and userinfo name the same `sub` |
 | `returnTo` | Same-origin path only. `//host`, `/\host`, URLs and control characters give `/me`. |
-| Login transaction | Sealed cookie `__Secure-sw_login`: AES-256-GCM, key from `NUXT_SESSION_SECRET` by HKDF-SHA256, cookie name as AAD. `HttpOnly; Secure; SameSite=Lax; Path=/api/auth/callback`, 10 minutes. Tampered, foreign or older = `login_expired`. The callback clears it. A replayed code fails at Zitadel. |
+| Login transaction | Sealed cookie `__Host-sw_login` (`HttpOnly; Secure; SameSite=Lax; Path=/`, no `Domain`, 10 minutes): no sibling subdomain can set it. AES-256-GCM; purpose `login-tx` in the HKDF-SHA256 key and in the AAD, so no other seal opens as a login. Tampered, foreign, other purpose or older = `login_expired`. The callback clears it. A replayed code fails at Zitadel. |
 | Session | Absolute end after `NUXT_SESSION_MAX_AGE_SECONDS` (8 h). Refresh does not extend it. |
 
 ## Session and CSRF

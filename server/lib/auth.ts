@@ -17,7 +17,7 @@ import { deriveKey, seal, unseal } from './seal'
 import {
   type KeyValueStore,
   LOGIN_COOKIE,
-  LOGIN_COOKIE_PATH,
+  LOGIN_SEAL_PURPOSE,
   LOGIN_TTL_SECONDS,
   type LoginTransaction,
   publicSession,
@@ -61,7 +61,7 @@ export class AuthService {
 
   constructor(private readonly deps: AuthDeps) {
     this.now = deps.now ?? Date.now
-    this.loginKey = deriveKey(deps.config.sessionSecret, 'login-transaction v1')
+    this.loginKey = deriveKey(deps.config.sessionSecret, LOGIN_SEAL_PURPOSE)
   }
 
   private get config() {
@@ -72,12 +72,18 @@ export class AuthService {
     return Math.floor(this.now() / 1000)
   }
 
-  private cookie(event: H3Event, name: string, value: string, maxAge: number, path = '/') {
-    setCookie(event, name, value, { httpOnly: true, secure: true, sameSite: 'lax', path, maxAge })
+  private cookie(event: H3Event, name: string, value: string, maxAge: number) {
+    setCookie(event, name, value, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      path: '/',
+      maxAge
+    })
   }
 
-  private clear(event: H3Event, name: string, path = '/') {
-    deleteCookie(event, name, { httpOnly: true, secure: true, sameSite: 'lax', path })
+  private clear(event: H3Event, name: string) {
+    deleteCookie(event, name, { httpOnly: true, secure: true, sameSite: 'lax', path: '/' })
   }
 
   /** Store TTL for a session: its remaining life plus a grace for the revoke in the sweep. */
@@ -98,8 +104,8 @@ export class AuthService {
       expiresAt: this.seconds() + LOGIN_TTL_SECONDS
     }
     const url = await this.deps.oidc.authorizeUrl({ ...tx, scope: studioScope(this.config) })
-    const sealed = seal(this.loginKey, tx, LOGIN_COOKIE)
-    this.cookie(event, LOGIN_COOKIE, sealed, LOGIN_TTL_SECONDS, LOGIN_COOKIE_PATH)
+    const sealed = seal(this.loginKey, tx, LOGIN_SEAL_PURPOSE)
+    this.cookie(event, LOGIN_COOKIE, sealed, LOGIN_TTL_SECONDS)
     return sendRedirect(event, url, 302)
   }
 
@@ -108,8 +114,8 @@ export class AuthService {
     const query = getQuery(event)
     const sealed = getCookie(event, LOGIN_COOKIE)
     // One use: the cookie goes with this response. A replay of the code fails at Zitadel.
-    this.clear(event, LOGIN_COOKIE, LOGIN_COOKIE_PATH)
-    const tx = sealed ? readLogin(unseal(this.loginKey, sealed, LOGIN_COOKIE)) : null
+    this.clear(event, LOGIN_COOKIE)
+    const tx = sealed ? readLogin(unseal(this.loginKey, sealed, LOGIN_SEAL_PURPOSE)) : null
     if (!tx || tx.expiresAt < this.seconds()) {
       return this.fail(event, 'login_expired', 'no valid login transaction')
     }
