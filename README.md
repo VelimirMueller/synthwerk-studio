@@ -19,6 +19,13 @@
 </picture>
 </p>
 
+## Status
+
+- **Decision:** this repo is a placeholder until epic E4 Studio core starts. No restore from `legacy-final`, no archive.
+- **Today:** `main` holds the README, brand files and a docs-only CI. There is no app code.
+- **Next:** the rewrite is tracked in [synthwerk#37](https://github.com/VelimirMueller/synthwerk/issues/37) to [#40](https://github.com/VelimirMueller/synthwerk/issues/40) and [synthwerk#95](https://github.com/VelimirMueller/synthwerk/issues/95).
+- **Old code:** tag `legacy-final` holds the Vuetify landing page, for history only.
+
 <br>
 
 <p>
@@ -48,7 +55,7 @@
 <p>
 <picture>
   <source media="(prefers-color-scheme: light)" srcset="assets/readme/start-v2-light.svg">
-  <img alt="Terminal: $ gh repo clone VelimirMueller/synthwerk-studio | $ cd synthwerk-studio | $ ls | LICENSE  README.md | # nothing runs here yet. epic E4 is the rewrite." src="assets/readme/start-v2-dark.svg" width="100%">
+  <img alt="Terminal: $ gh repo clone VelimirMueller/synthwerk-studio | $ cd synthwerk-studio | $ ls | LICENSE  README.md  assets  brand  fleet.yml  vm-brand.json | # README and brand files only. no app code." src="assets/readme/start-v2-dark.svg" width="100%">
 </picture>
 </p>
 
@@ -58,8 +65,7 @@
 ```bash
 gh repo clone VelimirMueller/synthwerk-studio
 cd synthwerk-studio
-ls
-# LICENSE  README.md — that is all. The rewrite is epic E4 Studio core.
+ls   # README and brand files only. No app code until epic E4 starts.
 ```
 
 </details>
@@ -126,14 +132,14 @@ ls
 <p>
 <picture>
   <source media="(prefers-color-scheme: light)" srcset="assets/readme/status-v2-light.svg">
-  <img alt="Legacy removal (S-E0): done. Rewrite: epic E4 Studio core. Site, builder, admin: planned in E4. Old Vuetify UI: tag legacy-final" src="assets/readme/status-v2-dark.svg" width="100%">
+  <img alt="Legacy removal (S-E0): done. This repo: placeholder until E4 starts. Site, builder, admin: planned in E4. Old Vuetify UI: tag legacy-final" src="assets/readme/status-v2-dark.svg" width="100%">
 </picture>
 </p>
 
 <p>
 <picture>
   <source media="(prefers-color-scheme: light)" srcset="assets/readme/statuslog-v2-light.svg">
-  <img alt="[ STATUS ]: Rewrite, epic E4 Studio core. [ NOW ]: Skeleton only. LICENSE and README. [ OLD ]: Tag legacy-final holds the Vuetify UI" src="assets/readme/statuslog-v2-dark.svg" width="100%">
+  <img alt="[ STATUS ]: Placeholder. Rewrite planned, epic E4 Studio core. [ NOW ]: README and brand files. No app code. [ OLD ]: Tag legacy-final holds the Vuetify UI" src="assets/readme/statuslog-v2-dark.svg" width="100%">
 </picture>
 </p>
 
