@@ -5,6 +5,12 @@ config:
   MD013: false
   MD033: false
   MD041: false
+  # Feature docs carry a title in the frontmatter and the same text as the H1.
+  MD025:
+    front_matter_title: ""
 ignores:
   - "node_modules/**"
+  - ".nuxt/**"
+  - ".output/**"
+  - ".worktrees/**"
   - "repos/**"

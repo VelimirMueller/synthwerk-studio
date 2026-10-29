@@ -1,12 +1,18 @@
-# Fleet standard docs-only caller (fleet-standard docs/rollout.md).
+# Fleet CI for the Nuxt studio (fleet-standard templates/library/public, stack node).
+# PRs and manual runs only: no push or tag runs (CI-COST-05, CI-COST-19). Required check: conclusion.
+# Tier library until the first environment exists; then deploy.yml and promote.yml (fleet.yml).
 name: ci
 
-# pull_request only, no push: one commit runs a check workflow once (CI-COST-05).
 on:
   pull_request:
     branches: [develop, main]
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
+    inputs:
+      e2e:
+        description: Run the e2e stage
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -44,38 +50,73 @@ jobs:
 
   lint:
     needs: changes
-    if: ${{ !failure() && !cancelled() && needs.changes.result == 'success' }}
+    if: ${{ !failure() && !cancelled() && needs.changes.outputs.code == 'true' }}
     permissions:
       contents: read
     uses: VelimirMueller/fleet-workflows/.github/workflows/_ci-lint.yml@v0.0.2
     with:
-      stack: docs
-      # Not the default docs lint: keep the checks of the old CI for the generated art
-      # (JSON config, SVG well-formed) next to Markdown and README file links (CI-LINT-01).
+      stack: node
+      # Biome, the Nuxt type check (vue-tsc over app, server and tests; tsc --noEmit does
+      # nothing on a references-only tsconfig), the v-html ban of the old blueprint ts-ci (FR-17),
+      # and the docs checks of the docs-only tier: Markdown, README file links, JSON, SVG.
       # The stage runs this block with `bash -eo pipefail`: any failing line fails lint.
       command: |
+        pnpm exec biome ci .
+        pnpm exec nuxt typecheck
+        ! git grep -n -E '(^|[[:space:]])v-html(=|[[:space:]]|$)' -- '*.vue'
         npx --yes markdownlint-cli2@0.18.1 '**/*.md'
         grep -oE '(src|srcset|href)="[^"#:]+"' README.md | sed -E 's/^[a-z]+="(.*)"$/\1/' | tr ', ' '\n\n' | grep -vE '^$|^[0-9.]+[wx]$' | sort -u | while read -r ref; do test -e "$ref" || { echo "::error file=README.md::missing file: $ref"; exit 1; }; done
         git ls-files -z '*.json' | xargs -0 -r -n1 jq empty
         git ls-files -z '*.svg' | xargs -0 -r python3 -c 'import sys, xml.etree.ElementTree as ET; [ET.parse(p) for p in sys.argv[1:]]'
 
-  conclusion:
+  unit:
     needs: [changes, lint]
+    if: ${{ !failure() && !cancelled() && needs.changes.outputs.code == 'true' }}
+    permissions:
+      contents: read
+    uses: VelimirMueller/fleet-workflows/.github/workflows/_ci-unit.yml@v0.0.2
+    with:
+      stack: node
+
+  e2e:
+    needs: [changes, unit]
+    if: ${{ !failure() && !cancelled() && github.event_name == 'workflow_dispatch' && inputs.e2e }}
+    permissions:
+      contents: read
+    uses: VelimirMueller/fleet-workflows/.github/workflows/_ci-e2e.yml@v0.0.2
+    with:
+      stack: node
+
+  build:
+    needs: [changes, e2e]
+    if: ${{ !failure() && !cancelled() && needs.changes.outputs.code == 'true' }}
+    permissions:
+      contents: read
+    uses: VelimirMueller/fleet-workflows/.github/workflows/_ci-build.yml@v0.0.2
+    with:
+      stack: node
+
+  # The one required check. `skipped` passes only for e2e (dispatch only) and for a docs-only run.
+  conclusion:
+    needs: [changes, lint, unit, e2e, build]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
     steps:
-      - name: Fail when a job failed or the lint stage was skipped
+      - name: Fail when a job failed or a required stage was skipped
         env:
-          CHANGES: ${{ needs.changes.result }}
+          CODE: ${{ needs.changes.outputs.code }}
           RESULTS: ${{ join(needs.*.result, ' ') }}
           LINT: ${{ needs.lint.result }}
+          UNIT: ${{ needs.unit.result }}
+          BUILD: ${{ needs.build.result }}
         run: |
           for r in $RESULTS; do
             case "$r" in success|skipped) ;; *) echo "::error::a job ended as $r"; exit 1 ;; esac
           done
-          # A docs-only repo lints every PR (CI-COST-10); only a draft PR skips it.
-          if [ "$CHANGES" = "success" ] && [ "$LINT" != "success" ]; then
-            echo "::error::the lint stage did not run"; exit 1
+          if [ "$CODE" = "true" ]; then
+            for r in "$LINT" "$UNIT" "$BUILD"; do
+              [ "$r" = "success" ] || { echo "::error::a required stage did not run"; exit 1; }
+            done
           fi
