@@ -65,7 +65,8 @@ export default defineNuxtConfig({
     '/api/apps/**': { headers: { 'cache-control': 'no-store' } },
     '/api/org/**': { headers: { 'cache-control': 'no-store' } },
     '/api/ai-settings/**': { headers: { 'cache-control': 'no-store' } },
-    '/api/labels/**': { headers: { 'cache-control': 'no-store' } }
+    '/api/labels/**': { headers: { 'cache-control': 'no-store' } },
+    '/api/me': { headers: { 'cache-control': 'no-store' } }
   },
   typescript: { strict: true }
 })

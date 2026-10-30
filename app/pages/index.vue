@@ -19,6 +19,9 @@ const error = computed(() => {
   return Object.hasOwn(messages, code) ? messages[code] : messages.login_failed
 })
 
+// After DELETE /api/me the page comes here with ?deleted=1.
+const deleted = computed(() => route.query.deleted === '1')
+
 function signIn() {
   return navigateTo(signInUrl('/me'), { external: true })
 }
@@ -28,6 +31,7 @@ function signIn() {
   <main class="page">
     <h1>Synthwerk Studio</h1>
     <p v-if="error" class="notice" role="alert">{{ error }}</p>
+    <p v-if="deleted" role="status">Your account is deleted. Zitadel removes your sign-in next.</p>
     <SwCard
       v-if="session"
       eyebrow="Signed in"

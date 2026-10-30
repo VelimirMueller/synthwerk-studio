@@ -7,6 +7,8 @@ export interface AuthSession {
   amr: string[]
   csrfToken: string
   expiresAt: string
+  /** A fresh sign-in for one action, until this time (ISO). */
+  stepUp?: { purpose: 'delete_account'; until: string }
 }
 
 /** Loads the session once per request. `null` = not signed in. */

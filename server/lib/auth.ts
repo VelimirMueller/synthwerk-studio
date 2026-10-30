@@ -24,6 +24,9 @@ import {
   SESSION_COOKIE,
   SESSION_TTL_GRACE_SECONDS,
   type SessionRecord,
+  STEP_UP_PURPOSES,
+  STEP_UP_TTL_SECONDS,
+  type StepUpPurpose,
   SWEEP_INTERVAL_SECONDS,
   safeEqual,
   safeReturnTo,
@@ -96,14 +99,49 @@ export class AuthService {
    * goes into a sealed cookie (AES-256-GCM), so this anonymous route writes nothing to the store.
    */
   async login(event: H3Event) {
+    return this.startLogin(event, { returnTo: safeReturnTo(getQuery(event).returnTo) })
+  }
+
+  /**
+   * GET /api/auth/reauth?purpose=delete_account: a step-up sign-in for one action. The provider
+   * must authenticate the user again (`prompt=login`, `max_age=0`). The callback then marks the
+   * session for that action for STEP_UP_TTL_SECONDS. Without a session it goes to the sign-in.
+   */
+  async reauth(event: H3Event) {
+    const purpose = getQuery(event).purpose
+    if (!isStepUpPurpose(purpose)) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Bad Request',
+        data: { code: 'invalid_request' }
+      })
+    }
+    const record = await this.current(event)
+    if (!record) return sendRedirect(event, '/?error=login_expired', 302)
+    return this.startLogin(
+      event,
+      { returnTo: STEP_UP_RETURN[purpose].ok, purpose, sub: record.identity.user.sub },
+      { prompt: 'login', maxAge: 0 }
+    )
+  }
+
+  private async startLogin(
+    event: H3Event,
+    extra: Pick<LoginTransaction, 'returnTo' | 'purpose' | 'sub'>,
+    fresh?: { prompt: 'login'; maxAge: number }
+  ) {
     const tx: LoginTransaction = {
       state: randomToken(),
       nonce: randomToken(),
       verifier: randomToken(48),
-      returnTo: safeReturnTo(getQuery(event).returnTo),
+      ...extra,
       expiresAt: this.seconds() + LOGIN_TTL_SECONDS
     }
-    const url = await this.deps.oidc.authorizeUrl({ ...tx, scope: studioScope(this.config) })
+    const url = await this.deps.oidc.authorizeUrl({
+      ...tx,
+      scope: studioScope(this.config),
+      ...fresh
+    })
     const sealed = seal(this.loginKey, tx, LOGIN_SEAL_PURPOSE)
     this.cookie(event, LOGIN_COOKIE, sealed, LOGIN_TTL_SECONDS)
     return sendRedirect(event, url, 302)
@@ -156,12 +194,14 @@ export class AuthService {
       }
       const sessionId = randomToken()
       const createdAt = this.seconds()
+      const stepUp = tx.purpose ? this.stepUp(tx, id, createdAt) : undefined
       const record: SessionRecord = {
         identity,
         tokens,
         csrf: randomToken(),
         createdAt,
-        expiresAt: createdAt + this.config.sessionMaxAgeSeconds
+        expiresAt: createdAt + this.config.sessionMaxAgeSeconds,
+        ...(stepUp ? { stepUp } : {})
       }
       await this.deps.store.setItem(sessionKey(sessionId), record, { ttl: this.sessionTtl(record) })
       void this.sweep()
@@ -169,12 +209,83 @@ export class AuthService {
       const old = getCookie(event, SESSION_COOKIE)
       if (old) await this.deps.store.removeItem(sessionKey(old))
       this.cookie(event, SESSION_COOKIE, sessionId, this.config.sessionMaxAgeSeconds)
+      if (tx.purpose && !stepUp) return sendRedirect(event, STEP_UP_RETURN[tx.purpose].failed, 302)
       return sendRedirect(event, tx.returnTo, 302)
     } catch (err) {
       if (tokens.refreshToken) await this.deps.oidc.revoke(tokens.refreshToken, 'refresh_token')
       const code: SignInError =
         err instanceof OidcError && err.code === 'mfa_required' ? 'mfa_required' : 'login_failed'
       return this.fail(event, code, describe(err))
+    }
+  }
+
+  /**
+   * The step-up mark of a callback, or undefined (logged) when the sign-in does not prove a fresh
+   * authentication of the same user: the ID token must name the user who started the step-up and
+   * carry an `auth_time` from within this login (the provider checked `max_age`).
+   */
+  private stepUp(
+    tx: LoginTransaction,
+    id: Record<string, unknown>,
+    now: number
+  ): SessionRecord['stepUp'] {
+    if (!tx.purpose) return undefined
+    const startedAt = tx.expiresAt - LOGIN_TTL_SECONDS
+    const authTime = id.auth_time
+    let reason = ''
+    if (typeof tx.sub !== 'string' || id.sub !== tx.sub) reason = 'another user signed in'
+    else if (typeof authTime !== 'number') reason = 'id_token has no auth_time'
+    else if (authTime < startedAt - CLOCK_SKEW_SECONDS || authTime > now + CLOCK_SKEW_SECONDS)
+      reason = 'auth_time is not from this sign-in'
+    if (reason) {
+      this.deps.log?.('warn', `step-up refused: ${tx.purpose} (${reason})`)
+      return undefined
+    }
+    return { purpose: tx.purpose, until: now + STEP_UP_TTL_SECONDS }
+  }
+
+  /**
+   * Takes the step-up mark of the session for one action (single use). Checks the session (401),
+   * the CSRF token (403 csrf_failed) and a valid mark for `purpose` (403 step_up_required). The
+   * mark is gone from the store before the action runs. Returns the session with its tokens.
+   */
+  async takeStepUp(event: H3Event, purpose: StepUpPurpose): Promise<SessionRecord> {
+    const id = getCookie(event, SESSION_COOKIE)
+    const record = await this.current(event)
+    if (!id || !record) {
+      throw createError({
+        statusCode: 401,
+        statusMessage: 'Unauthorized',
+        data: { code: 'unauthenticated' }
+      })
+    }
+    this.assertCsrfToken(event, record)
+    const mark = record.stepUp
+    if (!mark || mark.purpose !== purpose || mark.until <= this.seconds()) {
+      throw createError({
+        statusCode: 403,
+        statusMessage: 'Forbidden',
+        data: { code: 'step_up_required' }
+      })
+    }
+    const { stepUp: _used, ...rest } = record
+    await this.deps.store.setItem(sessionKey(id), rest, { ttl: this.sessionTtl(rest) })
+    return record
+  }
+
+  /**
+   * Ends the session after the account is gone: the Zitadel session (end_session with the ID
+   * token, from the server), the refresh token and the store entry. Best effort; never throws.
+   */
+  async endAfterDelete(event: H3Event, record: SessionRecord): Promise<void> {
+    const id = getCookie(event, SESSION_COOKIE)
+    try {
+      if (record.tokens.idToken) await this.deps.oidc.endSession(record.tokens.idToken)
+      if (id) await this.end(sessionKey(id), record)
+    } catch (err) {
+      this.deps.log?.('warn', `session end after delete failed: ${describe(err)}`)
+    } finally {
+      this.clear(event, SESSION_COOKIE)
     }
   }
 
@@ -294,7 +405,7 @@ export class AuthService {
         data: { code: 'unauthenticated' }
       })
     }
-    return publicSession(record)
+    return publicSession(record, this.seconds())
   }
 
   /**
@@ -360,13 +471,26 @@ export class AuthService {
   }
 }
 
+/** Where a step-up sign-in goes back to: on success, and when it proved nothing. */
+const STEP_UP_RETURN: Record<StepUpPurpose, { ok: string; failed: string }> = {
+  delete_account: { ok: '/me?delete=confirm', failed: '/me?delete=retry' }
+}
+
+/** Clock skew allowed between the provider's auth_time and the BFF clock. */
+const CLOCK_SKEW_SECONDS = 30
+
+function isStepUpPurpose(value: unknown): value is StepUpPurpose {
+  return typeof value === 'string' && (STEP_UP_PURPOSES as readonly string[]).includes(value)
+}
+
 /** Checks the shape of an unsealed login transaction. */
 function readLogin(value: unknown): LoginTransaction | null {
   if (!value || typeof value !== 'object') return null
   const tx = value as Record<string, unknown>
   const ok =
     ['state', 'nonce', 'verifier', 'returnTo'].every((k) => typeof tx[k] === 'string') &&
-    typeof tx.expiresAt === 'number'
+    typeof tx.expiresAt === 'number' &&
+    (tx.purpose === undefined || (isStepUpPurpose(tx.purpose) && typeof tx.sub === 'string'))
   return ok ? (tx as unknown as LoginTransaction) : null
 }
 

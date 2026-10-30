@@ -15,9 +15,25 @@ export interface KeyValueStore {
   getKeys(base?: string): Promise<string[]>
 }
 
+/** Actions that need a fresh sign-in first (step-up). */
+export const STEP_UP_PURPOSES = ['delete_account'] as const
+export type StepUpPurpose = (typeof STEP_UP_PURPOSES)[number]
+
+/** A fresh sign-in for one action. Single use: the action removes it. */
+export interface StepUp {
+  purpose: StepUpPurpose
+  /** Unix seconds. The action must start before this time. */
+  until: number
+}
+
+/** How long a step-up sign-in counts. Identity allows 15 min; the BFF asks for less. */
+export const STEP_UP_TTL_SECONDS = 300
+
 export interface SessionRecord {
   identity: StudioIdentity
   tokens: TokenSet
+  /** Set by a step-up sign-in (prompt=login) for one action. */
+  stepUp?: StepUp
   /** Per-session CSRF token. The page reads it from GET /api/auth/session. */
   csrf: string
   /** Unix seconds. */
@@ -34,6 +50,9 @@ export interface LoginTransaction {
   returnTo: string
   /** Unix seconds. */
   expiresAt: number
+  /** Step-up sign-in: the action it is for, and the user who started it. */
+  purpose?: StepUpPurpose
+  sub?: string
 }
 
 export const SESSION_COOKIE = '__Host-sw_session'
@@ -71,15 +90,19 @@ export function safeReturnTo(value: unknown, fallback = '/me'): string {
 }
 
 /** The session as the browser may see it: no token, only identity, CSRF token and expiry. */
-export function publicSession(record: SessionRecord) {
+export function publicSession(record: SessionRecord, now = Math.floor(Date.now() / 1000)) {
+  const stepUp = record.stepUp && record.stepUp.until > now ? record.stepUp : undefined
   return {
+    ...(stepUp ? { stepUp: { purpose: stepUp.purpose, until: toIso(stepUp.until) } } : {}),
     user: record.identity.user,
     org: record.identity.org,
     roles: record.identity.roles,
     amr: record.identity.amr,
     csrfToken: record.csrf,
-    expiresAt: new Date(record.expiresAt * 1000).toISOString()
+    expiresAt: toIso(record.expiresAt)
   }
 }
+
+const toIso = (seconds: number): string => new Date(seconds * 1000).toISOString()
 
 export type PublicSession = ReturnType<typeof publicSession>
