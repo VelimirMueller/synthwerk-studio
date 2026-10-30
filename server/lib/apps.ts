@@ -199,7 +199,10 @@ export function readChange(body: unknown): AppChange {
   if (b.allowedOrigins !== undefined) change.allowedOrigins = readOrigins(b.allowedOrigins)
   if (b.widgetSettings !== undefined) {
     const s = readSettings(b.widgetSettings)
-    if (!s) throw bad('Widget settings: a value is not allowed, or the greeting is too long.')
+    if (!s)
+      throw bad(
+        'Widget settings: a value is not allowed, or the greeting is not plain text of 280 characters or less.'
+      )
     change.widgetSettings = s
   }
   if (Object.keys(change).length === 0) throw bad('Nothing to change.')

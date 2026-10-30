@@ -71,7 +71,7 @@ updated: 2026-10-30
 | Mode | `system`, `light`, `dark` | `system` |
 | Language | `auto` (browser), `de`, `en` | `auto` |
 | Colour | Accent group of `@synthwerk/tokens`: `flagship`, `lab`, `ops`, `venture` | `flagship` |
-| Greeting | Plain text, 280 characters or less, line breaks allowed | empty: the widget's own greeting |
+| Greeting | Plain text, 280 characters or less, line breaks allowed. No control character and no bidi embedding, override or isolate (U+202A to U+202E, U+2066 to U+2069): the form shows why and Save stays off. Same rule as identity and the widget | empty: the widget's own greeting |
 
 - Storage: identity, `apps.widget_settings` (identity migration 0007). Not in the studio.
 - No free colour or CSS. Colours stay inside the token groups.
@@ -135,6 +135,8 @@ updated: 2026-10-30
 - `tests/shared/widget.test.ts` — `app and config - one module script, one <synthwerk-chat> with app-id and api-url, the token hook`
 - `tests/shared/widget.test.ts` — `versioned URL with SRI - integrity and crossorigin on the script tag`
 - `tests/shared/widget.test.ts` — `no or broken integrity - plain script tag, never a broken integrity attribute`
+- `tests/shared/widget.test.ts` — `bidi override RLO U+202E - refused`, `greetingProblem - names the reason the form shows`
+- `tests/server/apps.test.ts` — `PATCH /api/apps/:id - greeting with a bidi override - 400 invalid_request`
 - `tests/shared/widget.test.ts` — `config with quotes and angle brackets - escaped, no attribute break-out`
 - `tests/shared/widget.test.ts` — `settings - never in the snippet - the widget loads them, an attribute would win`
 - Not yet: Playwright e2e and the timed 5-minute embed run (needs the widget host and a running stack).
@@ -146,3 +148,4 @@ updated: 2026-10-30
 | 2026-10-30 | First version (synthwerk#38). |
 | 2026-10-30 | Snippet with `integrity` and `crossorigin` from `NUXT_PUBLIC_WIDGET_SCRIPT_INTEGRITY` (widgets#32). |
 | 2026-10-30 | Write routes read the JSON body through `server/lib/body.ts`: 64 KiB cap, read as a stream, 413 `payload_too_large` as soon as the cap is passed (also chunked). |
+| 2026-10-30 | Greeting form and BFF refuse bidi controls like identity and the widget; the form names the reason. |

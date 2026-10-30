@@ -4,6 +4,8 @@ import {
   accents,
   buildSnippet,
   defaultSettings,
+  greetingProblem,
+  greetingProblemText,
   langs,
   MAX_GREETING,
   modes,
@@ -83,6 +85,11 @@ const snippetReady = computed(
 const snippet = computed(() => (app.value ? buildSnippet(app.value.id, target.value) : ''))
 const snippetLines = computed(() => snippet.value.split('\n').map((text) => ({ text })))
 const greetingLeft = computed(() => MAX_GREETING - [...settings.greeting].length)
+// The same rule as the BFF, identity and the widget. Trimmed like the BFF trims it.
+const greetingError = computed(() => {
+  const problem = greetingProblem(settings.greeting.trim())
+  return problem ? greetingProblemText[problem] : ''
+})
 
 const copied = ref(false)
 let copiedTimer: ReturnType<typeof setTimeout> | undefined
@@ -207,12 +214,15 @@ const labels: Record<string, string> = {
                 class="textarea"
                 rows="2"
                 :disabled="!canManage"
+                :aria-invalid="greetingError !== ''"
+                aria-describedby="greeting-hint"
                 placeholder="Empty: the widget's own greeting"
               />
-              <span class="muted hint" :class="{ over: greetingLeft < 0 }">
+              <span id="greeting-hint" class="muted hint" :class="{ over: greetingError !== '' }">
                 {{ greetingLeft }}
                 characters left. Plain text.
               </span>
+              <span v-if="greetingError" class="notice" role="alert">{{ greetingError }}</span>
             </label>
           </form>
           <WidgetPreview :settings="settings" />
@@ -225,7 +235,7 @@ const labels: Record<string, string> = {
           <SwButton
             type="submit"
             form="settings-form"
-            :disabled="saving !== '' || greetingLeft < 0"
+            :disabled="saving !== '' || greetingError !== ''"
           >
             Save settings
           </SwButton>
