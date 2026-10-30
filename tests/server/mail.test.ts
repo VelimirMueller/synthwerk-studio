@@ -249,3 +249,9 @@ describe('SmtpMailer', () => {
     ).rejects.toThrow(/^smtp failed \(ECONNREFUSED\)$/)
   })
 })
+
+describe('SmtpMailer settings', () => {
+  it('refuses a sender without an address', () => {
+    expect(() => new SmtpMailer('h', 25, 'nobody')).toThrow(MailConfigError)
+  })
+})

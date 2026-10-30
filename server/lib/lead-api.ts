@@ -226,8 +226,8 @@ export class LeadApi {
     try {
       return await work()
     } catch (err) {
-      if (isError(err)) throw err
       if (err instanceof LeadStoreError) throw fail(err.status, err.code)
+      if (isError(err)) throw err
       throw this.unavailable(err)
     }
   }
