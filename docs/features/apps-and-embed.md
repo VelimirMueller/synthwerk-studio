@@ -145,3 +145,4 @@ updated: 2026-10-30
 |---|---|
 | 2026-10-30 | First version (synthwerk#38). |
 | 2026-10-30 | Snippet with `integrity` and `crossorigin` from `NUXT_PUBLIC_WIDGET_SCRIPT_INTEGRITY` (widgets#32). |
+| 2026-10-30 | Write routes read the JSON body through `server/lib/body.ts`: 64 KiB cap, read as a stream, 413 `payload_too_large` as soon as the cap is passed (also chunked). |

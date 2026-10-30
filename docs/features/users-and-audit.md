@@ -110,3 +110,4 @@ updated: 2026-10-30
 | 2026-10-30 | Pending invitations and revoke; invite answers 202; 429 with `Retry-After`; neutral status for active rows (synthwerk#37 security review). |
 | 2026-10-30 | The navigation links AI. The audit list reads `llm.ai_settings.changed`: the changed settings and the version (synthwerk#39). |
 | 2026-10-30 | Navigation adds Labels. `MembersClient.listMembers` takes a `limit` (1 to 100); the label admin uses it to confirm the stored role (synthwerk#44). |
+| 2026-10-30 | Write routes read the JSON body through `server/lib/body.ts`: 64 KiB cap, read as a stream, 413 `payload_too_large` as soon as the cap is passed (also chunked). |

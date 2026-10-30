@@ -5,11 +5,11 @@ import {
   getQuery,
   getRouterParam,
   type H3Event,
-  readBody,
   setResponseHeader,
   setResponseStatus
 } from 'h3'
 import type { AuthService } from './auth'
+import { readJsonBody } from './body'
 import { type IdentityConfig, IdentityConfigError } from './identity-config'
 import { MembersClient, MembersError } from './members'
 
@@ -133,12 +133,7 @@ function fail(status: number, code: string) {
 
 /** The JSON body as an object. Anything else counts as an empty body (the client refuses it). */
 async function readJson(event: H3Event): Promise<Record<string, unknown>> {
-  let body: unknown
-  try {
-    body = await readBody(event)
-  } catch {
-    throw fail(400, 'invalid_request')
-  }
+  const body = await readJsonBody(event)
   return body && typeof body === 'object' && !Array.isArray(body)
     ? (body as Record<string, unknown>)
     : {}

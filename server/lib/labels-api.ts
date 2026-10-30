@@ -1,10 +1,11 @@
 // The /api/labels BFF routes (synthwerk#44, docs/features/label-admin.md). Vision trusts the org
 // id in the path and takes only the service token, so this class is the authorization point:
 // session, CSRF, token role, then the stored membership in identity. The browser never sees a token.
-import { createError, getRouterParam, type H3Event, readBody, setResponseStatus } from 'h3'
+import { createError, getRouterParam, type H3Event, setResponseStatus } from 'h3'
 import type { AuthService } from './auth'
+import { readJsonBody } from './body'
 import { isOrgAdmin } from './health'
-import { type IdentityConfig, IdentityConfigError } from './identity-config'
+import type { IdentityConfig, IdentityConfigError } from './identity-config'
 import {
   checkLabelId,
   checkLabelInput,
@@ -12,7 +13,7 @@ import {
   LabelsError,
   VisionLabelsClient
 } from './labels'
-import { MembersClient, MembersError } from './members'
+import { confirmOrgAdmin, OrgAdminError } from './org-admin'
 import type { SessionRecord } from './session'
 import { type VisionConfig, VisionConfigError } from './vision-config'
 
@@ -101,28 +102,15 @@ export class LabelsApi {
     }
   }
 
-  /**
-   * Token claims can be stale after a demotion or a deactivation. Identity answers a one-item
-   * members page only to an active stored owner or admin, so that call confirms the role.
-   */
+  /** The stored membership in identity (lib/org-admin.ts). */
   private async confirmAdmin(record: SessionRecord): Promise<void> {
-    const identity = this.deps.identity
-    if (identity instanceof IdentityConfigError) {
-      throw notConfigured('identity_not_configured', identity)
-    }
-    const members = new MembersClient({
-      baseUrl: identity.baseUrl,
-      accessToken: record.tokens.accessToken,
-      fetch: this.deps.fetch
-    })
     try {
-      await members.listMembers(undefined, 1)
+      await confirmOrgAdmin(this.deps.identity, record, this.deps.fetch)
     } catch (err) {
-      if (!(err instanceof MembersError)) throw err
-      if (err.status === 401) throw fail(401, 'unauthenticated')
-      if (err.status === 403 || err.status === 404) throw fail(403, 'forbidden')
-      this.deps.log?.('warn', `identity check failed: ${err.message}`)
-      throw fail(502, 'upstream_unavailable')
+      if (!(err instanceof OrgAdminError)) throw err
+      if (err.status === 503) throw notConfigured(err.code, err)
+      if (err.status === 502) this.deps.log?.('warn', err.message)
+      throw fail(err.status, err.code)
     }
   }
 }
@@ -143,12 +131,7 @@ function notConfigured(code: string, err: Error) {
 
 /** The JSON body as an object. Anything else counts as an empty body (the check refuses it). */
 async function readJson(event: H3Event): Promise<Record<string, unknown>> {
-  let body: unknown
-  try {
-    body = await readBody(event)
-  } catch {
-    throw fail(400, 'invalid_request')
-  }
+  const body = await readJsonBody(event)
   return body && typeof body === 'object' && !Array.isArray(body)
     ? (body as Record<string, unknown>)
     : {}

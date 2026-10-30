@@ -114,3 +114,5 @@ Vision trusts the org id in the path. The BFF is the authorization point. It che
 | Date | Change |
 |---|---|
 | 2026-10-30 | First version: label set view, add label, new topic, delete added label (synthwerk#44). |
+| 2026-10-30 | The stored-membership check (step 6) moved to `server/lib/org-admin.ts`, shared with the page builder. Same behaviour. |
+| 2026-10-30 | Write routes read the JSON body through `server/lib/body.ts`: 64 KiB cap, read as a stream, 413 `payload_too_large` as soon as the cap is passed (also chunked). |

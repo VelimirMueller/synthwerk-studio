@@ -136,3 +136,4 @@ updated: 2026-10-30
 | 2026-10-30 | `app.css` adds the checkbox group of the AI settings page. `/api/ai-settings/**` is `no-store` (synthwerk#39). |
 | 2026-10-30 | Step-up sign-in `GET /api/auth/reauth` (`prompt=login`, `max_age=0`) for the account delete; `/me` has the delete card; `/?deleted=1` notice (synthwerk#41). |
 | 2026-10-30 | `app.css` adds the `.check` style (a checkbox with its text) for the labels page (synthwerk#44). |
+| 2026-10-30 | `app.css` adds the builder editor and the page section styles (synthwerk#46). The navigation links Builder. `nuxt.config.ts` has `builder.databaseUrl` and `/api/builder/**` is `no-store`. |
