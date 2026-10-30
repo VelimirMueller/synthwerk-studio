@@ -42,7 +42,7 @@ updated: 2026-10-30
 ## How to use
 
 - Set `NUXT_IDENTITY_URL` to the identity base URL. Local stack: `http://localhost:8080/identity` (the edge).
-- Sign in. Open `/users` or `/audit` from the navigation (Me, Apps, Users, Audit).
+- Sign in. Open `/users` or `/audit` from the navigation (Me, Apps, Users, Audit, AI).
 - Invite: type the email, choose the role, select **Send invite**. The invitation shows under **Pending invitations**. The user shows in the users list after the first sign-in.
 - The answer is the same for every email: the page never shows whether the email has an account.
 - Revoke: select **Revoke** on a pending invitation.
@@ -64,7 +64,7 @@ updated: 2026-10-30
 | Logs | No token, no email, no upstream `detail`. |
 | Rate limit | Identity limits invites. A 429 passes with `Retry-After` (seconds, 1 to 3600). |
 | Cache | `/api/org/**` has `Cache-Control: no-store`. |
-| Audit lines | Known types get a sentence. Other types show the type and the actor. The page strips `dev.synthwerk.identity.` and the version. Text only, no `v-html`. |
+| Audit lines | Known types get a sentence. Other types show the type and the actor. The page strips `dev.synthwerk.identity.` and the version; llm types keep `llm.`. `llm.ai_settings.changed` names the changed settings and the version, never the prompt. Text only, no `v-html`. |
 | Configuration | `NUXT_IDENTITY_URL`, absolute `http` or `https` URL, no user info, query or fragment. Server side only. Missing or bad: `/api/org` answers 503, sign-in keeps working. |
 
 ## Events
@@ -108,3 +108,4 @@ updated: 2026-10-30
 |---|---|
 | 2026-10-30 | First version: members, roles, invite, deactivate, reactivate, audit list (synthwerk#37). |
 | 2026-10-30 | Pending invitations and revoke; invite answers 202; 429 with `Retry-After`; neutral status for active rows (synthwerk#37 security review). |
+| 2026-10-30 | The navigation links AI. The audit list reads `llm.ai_settings.changed`: the changed settings and the version (synthwerk#39). |
