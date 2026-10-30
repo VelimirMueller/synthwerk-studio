@@ -16,6 +16,7 @@ definePageMeta({ middleware: 'auth' })
 const route = useRoute()
 const id = computed(() => String(route.params.pageId ?? ''))
 const api = useBuilderApi()
+const { session } = useAuthSession()
 
 const page = ref<BuilderPage | null>(null)
 /** The edit copy of the draft. The preview reads it, so it changes on every input. */
@@ -93,6 +94,55 @@ const publish = () =>
     'Published. The new version is live.'
   )
 
+const unpublish = () => {
+  if (!window.confirm('Take the page off the public site? All versions stay.')) return
+  void act(
+    'unpublish',
+    () => api.unpublish(id.value),
+    'Unpublished. The public site shows 404 for this page.'
+  )
+}
+
+/** Owners only (the server checks it too). */
+const isOwner = computed(() => {
+  const s = session.value
+  return !!s && s.roles.some((r) => r.role === 'owner' && r.orgIds.includes(s.org.id))
+})
+const deleteSlug = ref('')
+const deleteOpen = ref(false)
+
+async function removePage() {
+  const p = page.value
+  if (!p || busy.value || deleteSlug.value.trim() !== p.slug) return
+  busy.value = 'delete'
+  error.value = ''
+  try {
+    await api.remove(p.id, deleteSlug.value.trim())
+    saved.value = JSON.stringify(draft.value)
+    page.value = null
+    await navigateTo('/builder')
+  } catch (err) {
+    await handle(err)
+  } finally {
+    busy.value = ''
+  }
+}
+
+function copyVersion(version: number) {
+  const p = page.value
+  if (!p) return
+  if (dirty.value) {
+    error.value = 'Save or undo the draft changes first. Copy replaces the draft.'
+    return
+  }
+  if (!window.confirm(`Replace the draft with version ${version}? Nothing goes live.`)) return
+  void act(
+    'copy',
+    () => api.copyVersion(p.id, version, p.draftRevision),
+    `Version ${version} is now the draft. Publish it to make it live.`
+  )
+}
+
 function rollback(version: number) {
   if (!window.confirm(`Make version ${version} live again? The draft does not change.`)) return
   void act('rollback', () => api.rollback(id.value, version), `Version ${version} is live again.`)
@@ -107,7 +157,11 @@ async function show(version: number) {
   }
 }
 
+/** One lead form per page (LIMITS.leadForms). */
+const hasLeadForm = computed(() => draft.value.sections.some((s) => s.type === 'lead'))
+
 function addSection() {
+  if (addType.value === 'lead' && hasLeadForm.value) return
   draft.value.sections.push(newSection(addType.value, newSectionId()))
 }
 
@@ -174,7 +228,37 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onUnload))
           <SwButton :disabled="!canPublish" @click="publish">
             {{ busy === 'publish' ? 'Publishing…' : 'Publish' }}
           </SwButton>
+          <SwButton
+            kind="ghost"
+            :disabled="page.liveVersion === null || busy !== ''"
+            @click="unpublish"
+          >
+            {{ busy === 'unpublish' ? 'Unpublishing…' : 'Unpublish' }}
+          </SwButton>
+          <SwButton
+            v-if="isOwner"
+            kind="ghost"
+            :disabled="busy !== ''"
+            @click="deleteOpen = !deleteOpen"
+          >
+            Delete page
+          </SwButton>
         </div>
+        <form v-if="isOwner && deleteOpen" class="form" @submit.prevent="removePage">
+          <p class="notice">
+            Delete removes the page, its draft and every version. The history stays. Confirmed leads
+            stay. Type the slug <strong>{{ page.slug }}</strong> to confirm.
+          </p>
+          <div class="field">
+            <label for="delete-slug">Slug</label>
+            <SwInput id="delete-slug" v-model="deleteSlug" autocomplete="off" />
+          </div>
+          <div>
+            <SwButton type="submit" :disabled="busy !== '' || deleteSlug.trim() !== page.slug">
+              {{ busy === 'delete' ? 'Deleting…' : 'Delete for good' }}
+            </SwButton>
+          </div>
+        </form>
         <p v-if="dirty" class="muted hint">Save the draft first. Publish takes the saved draft.</p>
       </template>
     </SwCard>
@@ -228,7 +312,14 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onUnload))
       <div class="builder-row">
         <label class="sr-only" for="add-type">Section type</label>
         <select id="add-type" v-model="addType" class="select builder-add">
-          <option v-for="t in SECTION_TYPES" :key="t" :value="t">{{ SECTION_LABELS[t] }}</option>
+          <option
+            v-for="t in SECTION_TYPES"
+            :key="t"
+            :value="t"
+            :disabled="t === 'lead' && hasLeadForm"
+          >
+            {{ SECTION_LABELS[t] }}
+          </option>
         </select>
         <SwButton
           kind="secondary"
@@ -263,6 +354,14 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onUnload))
             <td class="muted">{{ date(v.publishedAt) }} by {{ actorLabel(v.publishedBy) }}</td>
             <td class="builder-row">
               <SwButton kind="ghost" size="sm" @click="show(v.version)">View</SwButton>
+              <SwButton
+                kind="ghost"
+                size="sm"
+                :disabled="busy !== ''"
+                @click="copyVersion(v.version)"
+              >
+                Copy into draft
+              </SwButton>
               <SwButton
                 kind="ghost"
                 size="sm"

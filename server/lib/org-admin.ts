@@ -20,6 +20,61 @@ export class OrgAdminError extends Error {
   }
 }
 
+/** The stored role identity confirmed, with the identity org UUID. */
+export interface ConfirmedRole {
+  identityOrgId: string
+  role: 'owner' | 'admin'
+}
+
+/** Pages of 100 members read to find the caller. An org this large is far beyond the demo. */
+export const MAX_ROLE_PAGES = 10
+
+/**
+ * Like confirmOrgAdmin, and also returns the stored role of the caller: it reads the members
+ * pages until it finds the caller's own row (synthwerk#108: delete is for owners only, and a
+ * token claim can be stale after a demotion). Caller not found, not active, or a member: 403.
+ */
+export async function confirmOrgRole(
+  identity: IdentityConfig | IdentityConfigError,
+  record: SessionRecord,
+  fetchImpl?: typeof fetch
+): Promise<ConfirmedRole> {
+  if (identity instanceof IdentityConfigError) {
+    throw new OrgAdminError(503, 'identity_not_configured', identity.message)
+  }
+  const members = new MembersClient({
+    baseUrl: identity.baseUrl,
+    accessToken: record.tokens.accessToken,
+    fetch: fetchImpl
+  })
+  const sub = record.identity.user.sub
+  try {
+    let cursor: string | undefined
+    for (let i = 0; i < MAX_ROLE_PAGES; i++) {
+      const page = await members.listMembers(cursor, 100)
+      const self = page.items.find((m) => m.user_id === sub)
+      if (self) {
+        if (self.status !== 'active' || (self.role !== 'owner' && self.role !== 'admin')) break
+        return { identityOrgId: await members.org(), role: self.role }
+      }
+      if (!page.next_cursor || page.next_cursor === cursor) break
+      cursor = page.next_cursor
+    }
+  } catch (err) {
+    throw toOrgAdminError(err)
+  }
+  throw new OrgAdminError(403, 'forbidden', 'not an active owner or admin')
+}
+
+function toOrgAdminError(err: unknown): unknown {
+  if (!(err instanceof MembersError)) return err
+  if (err.status === 401) return new OrgAdminError(401, 'unauthenticated', 'identity refused')
+  if (err.status === 403 || err.status === 404) {
+    return new OrgAdminError(403, 'forbidden', 'not an active owner or admin')
+  }
+  return new OrgAdminError(502, 'upstream_unavailable', `identity check failed: ${err.message}`)
+}
+
 export async function confirmOrgAdmin(
   identity: IdentityConfig | IdentityConfigError,
   record: SessionRecord,
@@ -38,11 +93,6 @@ export async function confirmOrgAdmin(
     // Cached by the client: listMembers read it first, so this makes no second call.
     return await members.org()
   } catch (err) {
-    if (!(err instanceof MembersError)) throw err
-    if (err.status === 401) throw new OrgAdminError(401, 'unauthenticated', 'identity refused')
-    if (err.status === 403 || err.status === 404) {
-      throw new OrgAdminError(403, 'forbidden', 'not an active owner or admin')
-    }
-    throw new OrgAdminError(502, 'upstream_unavailable', `identity check failed: ${err.message}`)
+    throw toOrgAdminError(err)
   }
 }

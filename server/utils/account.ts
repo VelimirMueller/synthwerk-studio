@@ -1,5 +1,7 @@
 // One AccountApi per server process. A missing NUXT_IDENTITY_URL stops only DELETE /api/me (503).
+// An org that closes with the account loses its leads in the studio database (synthwerk#105).
 import { AccountApi } from '../lib/account-api'
+import { BuilderConfigError } from '../lib/builder-config'
 import { IdentityConfigError, readIdentityConfig } from '../lib/identity-config'
 
 let api: AccountApi | undefined
@@ -15,7 +17,12 @@ export function useAccountApi(): AccountApi {
       log('warn', err.message)
       identity = err
     }
-    api = new AccountApi({ auth: useAuth(), identity, log })
+    const removeOrgData = async (orgIds: string[]) => {
+      const open = useBuilderStore()
+      if (open instanceof BuilderConfigError) return
+      await (await open()).leads.removeOrgs(orgIds)
+    }
+    api = new AccountApi({ auth: useAuth(), identity, log, removeOrgData })
   }
   return api
 }

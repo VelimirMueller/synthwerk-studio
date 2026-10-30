@@ -6,10 +6,14 @@
 //   read, so two editors cannot overwrite each other without a 409.
 // - Publish copies the draft into a new immutable version (1, 2, 3, …) and makes it live.
 // - Roll back makes an older published version live again. It does not change the draft.
-// - Create, publish and roll back write one row to builder_events: the audit trail.
+// - Unpublish clears the live version and keeps every version (synthwerk#108).
+// - Delete removes the page with its versions. Its events stay: the audit trail outlives it.
+// - Copy into draft puts the content of a published version into the draft (needs the revision).
+// - Create, publish, roll back, unpublish, delete and copy write one row to builder_events.
 import { randomUUID } from 'node:crypto'
 import type { Locale, PageContent } from '../../shared/sections'
 import type { Db } from './builder-db'
+import { LeadStore } from './lead-store'
 import { uuidv7 } from './uuidv7'
 
 export const MAX_PAGES_PER_ORG = 50
@@ -19,7 +23,10 @@ export const EVENT_LIST_LIMIT = 50
 export const EVENT_TYPES = {
   created: 'dev.synthwerk.studio.page.created.v1',
   published: 'dev.synthwerk.studio.page.published.v1',
-  rolledBack: 'dev.synthwerk.studio.page.rolled_back.v1'
+  rolledBack: 'dev.synthwerk.studio.page.rolled_back.v1',
+  unpublished: 'dev.synthwerk.studio.page.unpublished.v1',
+  deleted: 'dev.synthwerk.studio.page.deleted.v1',
+  versionCopied: 'dev.synthwerk.studio.page.version_copied.v1'
 } as const
 
 /** Who changes a page: the audit actor and the identity org UUID of the session org. */
@@ -123,10 +130,15 @@ const PAGE_SELECT = `
     left join builder_page_versions v on v.page_id = p.id and v.version = p.live_version`
 
 export class BuilderStore {
+  /** The leads of the builder pages (synthwerk#105): same database, same clock. */
+  readonly leads: LeadStore
+
   constructor(
     private readonly db: Db,
     private readonly now: () => Date = () => new Date()
-  ) {}
+  ) {
+    this.leads = new LeadStore(db, now)
+  }
 
   async listPages(orgId: string): Promise<PageSummary[]> {
     const { rows } = await this.db.query<PageRow>(
@@ -297,6 +309,83 @@ export class BuilderStore {
         locale: page.locale,
         version,
         previous_version: page.live_version
+      })
+      const { rows } = await tx.query<PageRow>(`${PAGE_SELECT} where p.id = $1`, [pageId])
+      return toSummary(rows[0] as PageRow)
+    })
+  }
+
+  /** Takes the page off the public site. Every version stays; publish or roll back brings it back. */
+  async unpublish(orgId: string, pageId: string, author: Author): Promise<PageSummary> {
+    return this.db.transaction(async (tx) => {
+      const page = await this.lockPage(tx, orgId, pageId)
+      if (page.live_version === null) throw new BuilderStoreError(409, 'not_live')
+      await tx.query('update builder_pages set live_version = null where id = $1', [pageId])
+      await this.event(tx, orgId, author, EVENT_TYPES.unpublished, pageId, {
+        page_id: pageId,
+        slug: page.slug,
+        locale: page.locale,
+        previous_version: page.live_version
+      })
+      return { ...toSummary(page), liveVersion: null, changed: true }
+    })
+  }
+
+  /**
+   * Deletes the page with its draft and versions. `slug` must be the slug of the page: a second
+   * check that the user deletes the page they see. Leads keep slug, locale and version.
+   */
+  async deletePage(orgId: string, pageId: string, author: Author, slug: string): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      const page = await this.lockPage(tx, orgId, pageId)
+      if (page.slug !== slug) throw new BuilderStoreError(409, 'confirm_mismatch')
+      // A pending lead of the page can never be confirmed into a page that is gone.
+      await tx.query("delete from builder_leads where page_id = $1 and status = 'pending'", [
+        pageId
+      ])
+      await tx.query('delete from builder_pages where id = $1', [pageId])
+      await this.event(tx, orgId, author, EVENT_TYPES.deleted, pageId, {
+        page_id: pageId,
+        slug: page.slug,
+        locale: page.locale,
+        previous_version: page.live_version
+      })
+    })
+  }
+
+  /**
+   * Replaces the draft with the content of a published version. `revision` must be the current
+   * draft revision, like a save. Nothing goes live.
+   */
+  async copyVersionToDraft(
+    orgId: string,
+    pageId: string,
+    author: Author,
+    version: number,
+    revision: number
+  ): Promise<PageSummary> {
+    return this.db.transaction(async (tx) => {
+      const page = await this.lockPage(tx, orgId, pageId)
+      if (page.draft_revision !== revision) throw new BuilderStoreError(409, 'draft_conflict')
+      const found = await tx.query<{ content: unknown }>(
+        'select content from builder_page_versions where page_id = $1 and version = $2',
+        [pageId, version]
+      )
+      const row = found.rows[0]
+      if (!row) throw new BuilderStoreError(404, 'version_not_found')
+      const content = json<PageContent>(row.content)
+      await tx.query(
+        `update builder_pages
+            set draft = $2, draft_revision = draft_revision + 1,
+                draft_updated_at = $3, draft_updated_by = $4
+          where id = $1`,
+        [pageId, JSON.stringify(content), this.now(), author.actor]
+      )
+      await this.event(tx, orgId, author, EVENT_TYPES.versionCopied, pageId, {
+        page_id: pageId,
+        slug: page.slug,
+        locale: page.locale,
+        version
       })
       const { rows } = await tx.query<PageRow>(`${PAGE_SELECT} where p.id = $1`, [pageId])
       return toSummary(rows[0] as PageRow)

@@ -4,7 +4,7 @@
 // The server checks every save with `checkContent`; the editor and the public site use the same
 // types, so both sides agree on what a section is.
 
-export const SECTION_TYPES = ['hero', 'proof', 'benefits', 'pricing', 'faq', 'cta'] as const
+export const SECTION_TYPES = ['hero', 'proof', 'benefits', 'pricing', 'faq', 'cta', 'lead'] as const
 export type SectionType = (typeof SECTION_TYPES)[number]
 
 export const SECTION_LABELS: Record<SectionType, string> = {
@@ -13,7 +13,8 @@ export const SECTION_LABELS: Record<SectionType, string> = {
   benefits: 'Benefits',
   pricing: 'Pricing',
   faq: 'FAQ',
-  cta: 'Call to action'
+  cta: 'Call to action',
+  lead: 'Lead form'
 }
 
 export const LOCALES = ['de', 'en'] as const
@@ -33,7 +34,9 @@ export const LIMITS = {
   benefitItems: 6,
   plans: 4,
   features: 10,
-  faqItems: 12
+  faqItems: 12,
+  /** Lead forms per page (synthwerk#105). */
+  leadForms: 1
 } as const
 
 export const SECTION_ID_PATTERN = /^[a-z0-9]{1,24}$/
@@ -118,6 +121,25 @@ export interface CtaSection {
   cta: Link
 }
 
+/**
+ * A lead form (synthwerk#105, docs/features/leads.md). The fields are fixed: email, an optional
+ * name (only when `nameField` is true) and a consent checkbox with the `consent` text. The
+ * visitor gets a confirm mail; the lead counts only after the confirm link (double opt-in).
+ */
+export interface LeadSection {
+  id: string
+  type: 'lead'
+  title: string
+  /** Markdown subset. */
+  body: string
+  /** Ask for a name too. Off by default: data minimisation. */
+  nameField: boolean
+  /** The text next to the consent checkbox. Markdown subset (a link to the privacy page). */
+  consent: string
+  /** The submit button label. */
+  button: string
+}
+
 export type Section =
   | HeroSection
   | ProofSection
@@ -125,6 +147,7 @@ export type Section =
   | PricingSection
   | FaqSection
   | CtaSection
+  | LeadSection
 
 export interface PageContent {
   title: string
@@ -317,6 +340,19 @@ function checkSection(value: unknown, path: string): Section {
         body: long(s.body, `${path}.body`),
         cta: link(s.cta, `${path}.cta`)
       }
+    case 'lead':
+      if (s.nameField !== undefined && typeof s.nameField !== 'boolean') {
+        throw new ContentError(`${path}.nameField`, 'must be true or false')
+      }
+      return {
+        id,
+        type: 'lead',
+        title: line(s.title, `${path}.title`, LIMITS.short, 1),
+        body: long(s.body, `${path}.body`),
+        nameField: s.nameField === true,
+        consent: long(s.consent, `${path}.consent`, 1),
+        button: line(s.button, `${path}.button`, LIMITS.label, 1)
+      }
     default:
       throw new ContentError(`${path}.type`, `must be one of ${SECTION_TYPES.join(', ')}`)
   }
@@ -333,9 +369,13 @@ export function checkContent(value: unknown): PageContent {
     checkSection(s, `sections[${i}]`)
   )
   const ids = new Set<string>()
+  let leads = 0
   for (const [i, s] of sections.entries()) {
     if (ids.has(s.id)) throw new ContentError(`sections[${i}].id`, 'must be unique on the page')
     ids.add(s.id)
+    if (s.type === 'lead' && ++leads > LIMITS.leadForms) {
+      throw new ContentError(`sections[${i}].type`, 'only one lead form per page')
+    }
   }
   return { title, sections }
 }
@@ -392,6 +432,17 @@ export function newSection(type: SectionType, id: string): Section {
         title: 'Ready to start?',
         body: '',
         cta: { label: 'Start now', href: '#start' }
+      }
+    case 'lead':
+      return {
+        id,
+        type,
+        title: 'Stay in touch',
+        body: 'We send news about the product. No more than one mail per month.',
+        nameField: false,
+        consent:
+          'I agree that Synthwerk stores my email address to send me news. I can withdraw at any time. See the [privacy page](/en/privacy).',
+        button: 'Sign up'
       }
   }
 }

@@ -51,8 +51,10 @@ const identityFetch = async (input: string | URL | Request, init: RequestInit = 
   })
 }
 
-function browser(identity: ConstructorParameters<typeof AccountApi>[0]['identity'] = config()) {
-  const api = new AccountApi({ auth: harness.service, identity, fetch: identityFetch })
+type Deps = ConstructorParameters<typeof AccountApi>[0]
+
+function browser(identity: Deps['identity'] = config(), extra: Partial<Deps> = {}) {
+  const api = new AccountApi({ auth: harness.service, identity, fetch: identityFetch, ...extra })
   const app = createApp()
   app.use(
     eventHandler((event) => {
@@ -298,5 +300,76 @@ describe('DELETE /api/me', () => {
     expect(res.status).toBe(200)
     expect(calls[0]?.idToken).toBe(before.tokens.idToken)
     expect(calls[0]?.authorization).not.toBe(`Bearer ${before.tokens.accessToken}`)
+  })
+})
+
+describe('DELETE /api/me - studio data of closed orgs (synthwerk#105)', () => {
+  const CLOSED = '019a3c20-1a2b-7c3d-8e4f-5a6b7c8d9e0f'
+
+  function withMe(meOrg: string | 'down') {
+    const removed: string[][] = []
+    const logs: string[] = []
+    const fetchImpl = async (input: string | URL | Request, init: RequestInit = {}) => {
+      if ((init.method ?? 'GET') === 'GET' && String(input).endsWith('/v1/me')) {
+        calls.push({ method: 'GET', url: String(input), authorization: '', idToken: '' })
+        if (meOrg === 'down') throw new TypeError('fetch failed')
+        return new Response(JSON.stringify({ subject: 'user-1', org: { id: meOrg }, roles: [] }), {
+          status: 200
+        })
+      }
+      return identityFetch(input, init)
+    }
+    const b = browser(config(), {
+      fetch: fetchImpl as typeof fetch,
+      log: (level, message) => logs.push(`${level}: ${message}`),
+      removeOrgData: async (ids) => {
+        removed.push(ids)
+      }
+    })
+    return { b, removed, logs }
+  }
+
+  it('the session org closed: its leads are deleted by the session org key', async () => {
+    const { b, removed } = withMe(CLOSED)
+    await stepUp(b)
+    const orgKey = record(b).identity.org.id
+    expect((await del(b)).status).toBe(200)
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      `GET ${IDENTITY_URL}/v1/me`,
+      `DELETE ${IDENTITY_URL}/v1/me`
+    ])
+    expect(removed).toEqual([[orgKey]])
+  })
+
+  it('the session org stays (other members): nothing is deleted', async () => {
+    const { b, removed } = withMe('0199f3a0-5b6c-7d8e-9f0a-1b2c3d4e5f60')
+    await stepUp(b)
+    expect((await del(b)).status).toBe(200)
+    expect(removed).toEqual([])
+  })
+
+  it('identity me fails: the account delete still runs; a log line says the cleanup was skipped', async () => {
+    const { b, removed, logs } = withMe('down')
+    await stepUp(b)
+    expect((await del(b)).status).toBe(200)
+    expect(removed).toEqual([])
+    expect(logs).toEqual(['warn: identity me failed (TypeError); org data delete skipped'])
+  })
+
+  it('a failed cleanup does not fail the answer and is logged', async () => {
+    const logs: string[] = []
+    const b = browser(config(), {
+      fetch: (async (input: string | URL | Request, init: RequestInit = {}) =>
+        (init.method ?? 'GET') === 'GET'
+          ? new Response(JSON.stringify({ org: { id: CLOSED } }), { status: 200 })
+          : identityFetch(input, init)) as typeof fetch,
+      log: (level, message) => logs.push(`${level}: ${message}`),
+      removeOrgData: async () => {
+        throw new Error('db down')
+      }
+    })
+    await stepUp(b)
+    expect((await del(b)).status).toBe(200)
+    expect(logs).toEqual(['error: org data delete failed (Error): leads of a closed org remain'])
   })
 })

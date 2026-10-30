@@ -14,6 +14,11 @@ export interface AccountApiDeps {
   identity: IdentityConfig | IdentityConfigError
   fetch?: typeof fetch
   log?: (level: 'warn' | 'error', message: string) => void
+  /**
+   * Deletes the studio data of orgs that closed with the account (synthwerk#105: the leads). Gets
+   * the org keys of the session (`org.id` claim), not identity UUIDs.
+   */
+  removeOrgData?: (orgIds: string[]) => Promise<void>
 }
 
 /** What the page gets after a delete. */
@@ -50,6 +55,11 @@ export class AccountApi {
     const record = await this.deps.auth.takeStepUp(event, 'delete_account')
     const idToken = record.tokens.idToken
     if (!idToken) throw fail(403, 'Forbidden', 'step_up_required')
+    // identity answers with identity org UUIDs; the studio keys its data by the session org key.
+    // Read the UUID of the session org first, while the account still exists.
+    const sessionOrg = this.deps.removeOrgData
+      ? await this.identityOrgId(identity.baseUrl, record.tokens.accessToken)
+      : null
 
     let res: Response
     try {
@@ -75,6 +85,12 @@ export class AccountApi {
       const ids = Array.isArray(body.deleted_org_ids)
         ? body.deleted_org_ids.filter((v): v is string => typeof v === 'string')
         : []
+      if (sessionOrg && ids.includes(sessionOrg) && this.deps.removeOrgData) {
+        await this.deps.removeOrgData([record.identity.org.id]).catch((err: unknown) => {
+          const name = err instanceof Error ? err.name : 'error'
+          this.deps.log?.('error', `org data delete failed (${name}): leads of a closed org remain`)
+        })
+      }
       return { status: 'accepted', deletedOrgIds: ids }
     }
     const passed = PASSED[res.status]
@@ -83,7 +99,27 @@ export class AccountApi {
     this.deps.log?.('warn', `identity delete: status ${res.status}`)
     throw fail(502, 'Bad Gateway', 'upstream_unavailable')
   }
+
+  /** The identity org UUID of the caller (GET /v1/me), or null with a log line. */
+  private async identityOrgId(baseUrl: string, accessToken: string): Promise<string | null> {
+    try {
+      const res = await (this.deps.fetch ?? fetch)(`${baseUrl}/v1/me`, {
+        headers: { authorization: `Bearer ${accessToken}`, accept: 'application/json' },
+        redirect: 'error'
+      })
+      const me = (await res.json().catch(() => null)) as { org?: { id?: unknown } } | null
+      const id = me?.org?.id
+      if (res.ok && typeof id === 'string' && UUID.test(id)) return id
+      this.deps.log?.('warn', `identity me: status ${res.status}; org data delete skipped`)
+    } catch (err) {
+      const name = err instanceof Error ? err.name : 'error'
+      this.deps.log?.('warn', `identity me failed (${name}); org data delete skipped`)
+    }
+    return null
+  }
 }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 function fail(status: number, text: string, code: string) {
   return createError({ statusCode: status, statusMessage: text, message: text, data: { code } })
