@@ -84,8 +84,9 @@ const snippetReady = computed(
 )
 const snippet = computed(() => (app.value ? buildSnippet(app.value.id, target.value) : ''))
 const snippetLines = computed(() => snippet.value.split('\n').map((text) => ({ text })))
-const greetingLeft = computed(() => MAX_GREETING - [...settings.greeting].length)
-// The same rule as the BFF, identity and the widget. Trimmed like the BFF trims it.
+const greetingLeft = computed(() => MAX_GREETING - [...settings.greeting.trim()].length)
+// The same rule as the BFF, identity and the widget. Counter and check use the trimmed
+// text, as the BFF stores it.
 const greetingError = computed(() => {
   const problem = greetingProblem(settings.greeting.trim())
   return problem ? greetingProblemText[problem] : ''
