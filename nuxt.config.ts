@@ -41,6 +41,9 @@ export default defineNuxtConfig({
     // Vision as the studio server reaches it (NUXT_VISION_URL) and the service token of its
     // admin routes (NUXT_VISION_ADMIN_TOKEN, env only). Label admin, synthwerk#44. Server side only.
     vision: { url: '', adminToken: '' },
+    // The page builder database (synthwerk#46): NUXT_BUILDER_DATABASE_URL, a postgres:// URL owned
+    // by the studio server. Env only (it holds the password). Server side only.
+    builder: { databaseUrl: '' },
     public: {
       // The embed snippet (synthwerk#38): NUXT_PUBLIC_WIDGET_SCRIPT_URL,
       // NUXT_PUBLIC_WIDGET_SCRIPT_INTEGRITY (SRI of that version, widgets#32), NUXT_PUBLIC_WIDGET_API_URL.
@@ -67,6 +70,7 @@ export default defineNuxtConfig({
     '/api/org/**': { headers: { 'cache-control': 'no-store' } },
     '/api/ai-settings/**': { headers: { 'cache-control': 'no-store' } },
     '/api/labels/**': { headers: { 'cache-control': 'no-store' } },
+    '/api/builder/**': { headers: { 'cache-control': 'no-store' } },
     '/api/me': { headers: { 'cache-control': 'no-store' } }
   },
   typescript: { strict: true }
