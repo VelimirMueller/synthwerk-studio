@@ -244,7 +244,11 @@ describe('refusals', () => {
   it.each([
     ['empty body', {}],
     ['free colour', { widgetSettings: { ...defaultSettings(), accent: '#f0f' } }],
-    ['long greeting', { widgetSettings: { ...defaultSettings(), greeting: 'a'.repeat(281) } }]
+    ['long greeting', { widgetSettings: { ...defaultSettings(), greeting: 'a'.repeat(281) } }],
+    [
+      'greeting with a bidi override',
+      { widgetSettings: { ...defaultSettings(), greeting: 'Hi \u202etxt.exe' } }
+    ]
   ])('PATCH /api/apps/:id - %s - 400 invalid_request', async (_n, body) => {
     const res = await harness(identity)(`/api/apps/${APP}`, write('PATCH', body))
     expect(res.status).toBe(400)

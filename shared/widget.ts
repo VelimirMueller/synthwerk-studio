@@ -32,11 +32,31 @@ export const defaultSettings = (): WidgetSettings => ({
 const oneOf = <T extends string>(allowed: readonly T[], value: unknown): value is T =>
   typeof value === 'string' && (allowed as readonly string[]).includes(value)
 
-/** Same rule as identity: 280 characters or less, no control character but a line break. */
-export function validGreeting(value: string): boolean {
-  if ([...value].length > MAX_GREETING) return false
+/** Why a greeting is refused: too long, a control character, or a bidi control. */
+export type GreetingProblem = 'too_long' | 'control' | 'bidi'
+
+/**
+ * Same rule as identity and the widget: 280 characters or less, no control character but a
+ * line break, no bidi embedding, override or isolate (U+202A to U+202E, U+2066 to U+2069).
+ * A bidi control can turn the text around on the page (Trojan Source). `null`: accepted.
+ */
+export function greetingProblem(value: string): GreetingProblem | null {
+  if ([...value].length > MAX_GREETING) return 'too_long'
   // biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are refused on purpose.
-  return !/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/.test(value)
+  if (/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/.test(value)) return 'control'
+  if (/[\u202a-\u202e\u2066-\u2069]/.test(value)) return 'bidi'
+  return null
+}
+
+export function validGreeting(value: string): boolean {
+  return greetingProblem(value) === null
+}
+
+/** The form text for a refused greeting. */
+export const greetingProblemText: Record<GreetingProblem, string> = {
+  too_long: `The greeting is longer than ${MAX_GREETING} characters.`,
+  control: 'The greeting holds a control character. Use plain text and line breaks only.',
+  bidi: 'The greeting holds a text direction character (U+202A to U+202E or U+2066 to U+2069). Remove it.'
 }
 
 /** Checks settings from a request body. Returns null when one field is not allowed. */

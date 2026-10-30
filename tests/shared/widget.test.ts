@@ -3,6 +3,7 @@ import {
   attr,
   buildSnippet,
   defaultSettings,
+  greetingProblem,
   readSettings,
   usableIntegrity,
   usableUrl,
@@ -113,6 +114,10 @@ describe('readSettings', () => {
     ['unknown position', { position: 'top-left' }],
     ['greeting too long', { greeting: 'a'.repeat(281) }],
     ['control character', { greeting: 'a\u0007b' }],
+    ['bidi override RLO U+202E', { greeting: 'Hallo \u202etxt.exe' }],
+    ['bidi embedding LRE U+202A', { greeting: 'a\u202ab' }],
+    ['bidi isolate LRI U+2066', { greeting: 'a\u2066b' }],
+    ['bidi isolate end PDI U+2069', { greeting: 'a\u2069b' }],
     ['greeting not a string', { greeting: 3 }],
     ['extra field', { css: 'body{}' }]
   ])('%s - refused', (_name, change) => {
@@ -124,6 +129,19 @@ describe('readSettings', () => {
     expect(readSettings(partial)).toBeNull()
     expect(readSettings([])).toBeNull()
     expect(readSettings(null)).toBeNull()
+  })
+
+  it('greeting in a right-to-left script and marks next to the refused set - accepted', () => {
+    for (const g of ['مرحبا بك', 'שלום', 'a\u200fb', 'a\u2029b', 'a\u206ab']) {
+      expect(validGreeting(g)).toBe(true)
+    }
+  })
+
+  it('greetingProblem - names the reason the form shows', () => {
+    expect(greetingProblem('a'.repeat(281))).toBe('too_long')
+    expect(greetingProblem('a\u0007b')).toBe('control')
+    expect(greetingProblem('a\u202eb')).toBe('bidi')
+    expect(greetingProblem('Hallo!\nWie geht es?')).toBeNull()
   })
 
   it('greeting of 280 characters outside the BMP - accepted (counts characters, not code units)', () => {
