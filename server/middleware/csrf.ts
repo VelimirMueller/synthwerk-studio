@@ -12,5 +12,5 @@ export default defineEventHandler((event) => {
     if (event.method === 'GET' || event.method === 'HEAD') return
     if (event.method === 'POST' && LEAD_ROUTES.has(path)) return
   }
-  if (event.path.startsWith('/api/')) useAuth().assertSameOrigin(event)
+  if (path.startsWith('/api/')) useAuth().assertSameOrigin(event)
 })

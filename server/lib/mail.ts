@@ -201,16 +201,21 @@ export function buildMessage(from: string, mail: Mail, now: Date, id: string): s
  */
 export class SmtpMailer implements Mailer {
   readonly provider = 'smtp'
+  private readonly sender: string
 
   constructor(
     private readonly host: string,
     private readonly port: number,
     private readonly from: string
-  ) {}
+  ) {
+    const sender = addressOf(from)
+    if (!sender) throw new MailConfigError('NUXT_MAIL_FROM must be "Name <address>" or an address')
+    this.sender = sender
+  }
 
   async send(mail: Mail): Promise<void> {
     checkMail(mail)
-    const sender = addressOf(this.from) ?? ''
+    const sender = this.sender
     const message = buildMessage(this.from, mail, new Date(), randomUUID())
     const socket = new Socket()
     socket.setTimeout(TIMEOUT_MS)
