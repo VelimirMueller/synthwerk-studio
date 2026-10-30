@@ -26,6 +26,11 @@ export default defineNuxtConfig({
       maxAgeSeconds: 28800,
       // Key material for the sealed login cookie. Env only: NUXT_SESSION_SECRET.
       secret: ''
+    },
+    // Pulse inside the network, for example http://pulse:8080 (NUXT_PULSE_BASE_URL).
+    // The browser never calls it: server/api/health is the BFF (synthwerk#40).
+    pulse: {
+      baseUrl: ''
     }
   },
   nitro: {
@@ -42,7 +47,8 @@ export default defineNuxtConfig({
         'x-frame-options': 'DENY'
       }
     },
-    '/api/auth/**': { headers: { 'cache-control': 'no-store' } }
+    '/api/auth/**': { headers: { 'cache-control': 'no-store' } },
+    '/api/health/**': { headers: { 'cache-control': 'no-store' } }
   },
   typescript: { strict: true }
 })

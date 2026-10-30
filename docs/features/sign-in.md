@@ -4,11 +4,11 @@ slug: sign-in
 status: beta
 epic: E2
 owner: studio
-paths: ["server/**", "app/**"]
+paths: ["server/api/auth/**", "server/lib/auth.ts", "server/lib/claims.ts", "server/lib/config.ts", "server/lib/oidc.ts", "server/lib/seal.ts", "server/lib/session.ts", "server/utils/auth.ts", "server/middleware/**", "app/middleware/**", "app/composables/useAuthSession.ts", "app/pages/index.vue", "app/pages/me.vue"]
 api: ["GET /api/auth/login", "GET /api/auth/callback", "GET /api/auth/session", "POST /api/auth/logout"]
 events: []
 mcp: []
-updated: 2026-10-29
+updated: 2026-10-30
 ---
 
 # Sign-in through the studio BFF
@@ -121,3 +121,9 @@ updated: 2026-10-29
 - `tests/server/oidc.test.ts` — discovery, PKCE, token checks, end_session
 - `tests/server/config-claims.test.ts` — settings, claims, `returnTo`, constant-time compare
 - Local stack, 2026-10-29 (synthwerk-infra `64a4a1a`, edge on port 18080): login, Zitadel authorize to login UI v2, session API sign-in of `owner.demo`, callback, `/me` with org `demo` and role `owner`, refresh after 250 s, CSRF refusals, logout. Zitadel answered 404 for the session after logout.
+
+## Changes
+
+| Date | Change |
+|---|---|
+| 2026-10-30 | `paths` lists the sign-in files only, so other features keep their own doc. The home page links `/health` for operators, owners and admins (synthwerk#40). |
