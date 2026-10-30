@@ -42,8 +42,9 @@ export default defineNuxtConfig({
     // admin routes (NUXT_VISION_ADMIN_TOKEN, env only). Label admin, synthwerk#44. Server side only.
     vision: { url: '', adminToken: '' },
     public: {
-      // The embed snippet (synthwerk#38): NUXT_PUBLIC_WIDGET_SCRIPT_URL, NUXT_PUBLIC_WIDGET_API_URL.
-      widget: { scriptUrl: '', apiUrl: '' }
+      // The embed snippet (synthwerk#38): NUXT_PUBLIC_WIDGET_SCRIPT_URL,
+      // NUXT_PUBLIC_WIDGET_SCRIPT_INTEGRITY (SRI of that version, widgets#32), NUXT_PUBLIC_WIDGET_API_URL.
+      widget: { scriptUrl: '', scriptIntegrity: '', apiUrl: '' }
     }
   },
   nitro: {

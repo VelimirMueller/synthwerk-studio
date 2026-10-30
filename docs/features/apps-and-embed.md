@@ -40,7 +40,8 @@ updated: 2026-10-30
 4. Copy the snippet into the page. After sign-in, the page hands in the access token of its user:
 
    ```html
-   <script type="module" src="https://<widget host>/synthwerk-chat.js"></script>
+   <script type="module" src="https://<widget host>/widgets/v0.2.0/synthwerk-chat.js"
+           integrity="sha384-…" crossorigin="anonymous"></script>
    <synthwerk-chat app-id="<app id>" api-url="https://<edge>"></synthwerk-chat>
    <script type="module">
      // After sign-in and sign-out: hand in the access token of the signed-in user, or null.
@@ -57,6 +58,9 @@ updated: 2026-10-30
 - Config values are escaped for an HTML attribute. The page shows the snippet as text (`SwTerminalSnippet`), never as HTML. No `v-html`.
 - The copy button uses the Clipboard API. A refused copy shows a hint.
 - The snippet shows only when both URLs are absolute `https` URLs, or `http` on localhost. Else the page names the missing variables.
+- With `NUXT_PUBLIC_WIDGET_SCRIPT_INTEGRITY` set, the script tag gets `integrity` and `crossorigin="anonymous"` (widgets#32). The browser refuses a changed bundle.
+- The value must be one `sha256`, `sha384` or `sha512` hash in base64. Any other value: no `integrity` attribute.
+- Set it only with a versioned URL (`/widgets/vX.Y.Z/synthwerk-chat.js`). The hash is in the widgets release notes and the build job summary.
 
 ## Widget settings
 
@@ -72,15 +76,16 @@ updated: 2026-10-30
 - Storage: identity, `apps.widget_settings` (identity migration 0007). Not in the studio.
 - No free colour or CSS. Colours stay inside the token groups.
 - The preview sets `data-theme`, `data-mode` and `data-group` on its frame, so it reads the same token values as the widget.
-- The preview is a picture of the widget, not the widget bundle. The bundle has no host yet.
-- Loading the settings in the widget is widgets#34. Until then the widget uses its attribute defaults.
+- The preview is a picture of the widget, not the widget bundle. The bundle has no host yet (widgets#32).
+- The widget loads these settings since widgets 0.2.0 (widgets#34).
 
 ## Configuration
 
 | Variable | Default | Use |
 |---|---|---|
 | `NUXT_IDENTITY_URL` | none | Identity base URL as the studio server reaches it. Local: `http://localhost:8080/identity` (edge). Unset: the app routes answer 503 `not_configured`. |
-| `NUXT_PUBLIC_WIDGET_SCRIPT_URL` | none | URL of `synthwerk-chat.js` in the snippet |
+| `NUXT_PUBLIC_WIDGET_SCRIPT_URL` | none | URL of `synthwerk-chat.js` in the snippet. Use the versioned URL |
+| `NUXT_PUBLIC_WIDGET_SCRIPT_INTEGRITY` | none | SRI hash of that version (`sha384-…`). Adds `integrity` and `crossorigin` |
 | `NUXT_PUBLIC_WIDGET_API_URL` | none | Edge base URL in the snippet (`api-url`). The widget calls `/identity` and `/llm` below it. |
 
 ## Rules and limits
@@ -128,6 +133,8 @@ updated: 2026-10-30
 - `tests/server/apps.test.ts` — `GET /api/apps - two identity pages - follows next_cursor, returns both pages`
 - `tests/server/apps.test.ts` — `server/api/apps/<file> - runs appRoutes.<name>, the route this harness tests`
 - `tests/shared/widget.test.ts` — `app and config - one module script, one <synthwerk-chat> with app-id and api-url, the token hook`
+- `tests/shared/widget.test.ts` — `versioned URL with SRI - integrity and crossorigin on the script tag`
+- `tests/shared/widget.test.ts` — `no or broken integrity - plain script tag, never a broken integrity attribute`
 - `tests/shared/widget.test.ts` — `config with quotes and angle brackets - escaped, no attribute break-out`
 - `tests/shared/widget.test.ts` — `settings - never in the snippet - the widget loads them, an attribute would win`
 - Not yet: Playwright e2e and the timed 5-minute embed run (needs the widget host and a running stack).
@@ -137,3 +144,4 @@ updated: 2026-10-30
 | Date | Change |
 |---|---|
 | 2026-10-30 | First version (synthwerk#38). |
+| 2026-10-30 | Snippet with `integrity` and `crossorigin` from `NUXT_PUBLIC_WIDGET_SCRIPT_INTEGRITY` (widgets#32). |

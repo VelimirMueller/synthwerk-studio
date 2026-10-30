@@ -4,6 +4,7 @@ import {
   buildSnippet,
   defaultSettings,
   readSettings,
+  usableIntegrity,
   usableUrl,
   validGreeting
 } from '../../shared/widget'
@@ -24,6 +25,27 @@ describe('buildSnippet', () => {
       `<synthwerk-chat app-id="${APP}" api-url="https://api.synthwerk.dev"></synthwerk-chat>`
     )
     expect(lines.join('\n')).toContain('.getUserToken = () =>')
+  })
+
+  it('versioned URL with SRI - integrity and crossorigin on the script tag', () => {
+    const integrity = 'sha384-5pKeePwkGQgg0LEB3qamf7ac3VCWQBfGMfflVp9APDFWh9pU/UXdKk5EqI7Ya8GW'
+    const lines = buildSnippet(APP, {
+      ...target,
+      scriptUrl: 'https://edge.synthwerk.dev/widgets/v0.2.0/synthwerk-chat.js',
+      scriptIntegrity: ` ${integrity} `
+    }).split('\n')
+    expect(lines[0]).toBe(
+      `<script type="module" src="https://edge.synthwerk.dev/widgets/v0.2.0/synthwerk-chat.js" integrity="${integrity}" crossorigin="anonymous"></script>`
+    )
+  })
+
+  it('no or broken integrity - plain script tag, never a broken integrity attribute', () => {
+    for (const scriptIntegrity of ['', 'md5-abc', 'sha384-"><img src=x>', 'sha384-short']) {
+      const first = buildSnippet(APP, { ...target, scriptIntegrity }).split('\n')[0]
+      expect(first).toBe(
+        '<script type="module" src="https://cdn.synthwerk.dev/synthwerk-chat.js"></script>'
+      )
+    }
   })
 
   it('settings - never in the snippet - the widget loads them, an attribute would win', () => {
@@ -57,6 +79,21 @@ describe('usableUrl', () => {
     ['', false]
   ])('%s - %s', (value, ok) => {
     expect(usableUrl(value)).toBe(ok)
+  })
+})
+
+describe('usableIntegrity', () => {
+  it.each([
+    ['sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=', true],
+    ['sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb', true],
+    [`sha512-${'A'.repeat(86)}==`, true],
+    ['sha1-abc', false],
+    ['sha384-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=', false],
+    ['sha384-', false],
+    ['sha384-abc def', false],
+    ['', false]
+  ])('%s - %s', (value, ok) => {
+    expect(usableIntegrity(value)).toBe(ok)
   })
 })
 

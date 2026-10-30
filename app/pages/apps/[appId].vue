@@ -72,7 +72,11 @@ async function onDelete() {
   }
 }
 
-const target = computed(() => ({ scriptUrl: widget.scriptUrl, apiUrl: widget.apiUrl }))
+const target = computed(() => ({
+  scriptUrl: widget.scriptUrl,
+  scriptIntegrity: widget.scriptIntegrity ?? '',
+  apiUrl: widget.apiUrl
+}))
 const snippetReady = computed(
   () => usableUrl(target.value.scriptUrl) && usableUrl(target.value.apiUrl)
 )

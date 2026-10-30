@@ -87,8 +87,13 @@ export function settingsFromIdentity(value: unknown): WidgetSettings {
 
 /** Where the widget script and the edge live. Both come from the studio runtime config. */
 export interface EmbedTarget {
-  /** URL of `synthwerk-chat.js`. */
+  /** URL of `synthwerk-chat.js`. A versioned URL: `https://<host>/widgets/vX.Y.Z/synthwerk-chat.js`. */
   scriptUrl: string
+  /**
+   * Subresource Integrity of that version (`sha384-…`, from the widgets release notes).
+   * Empty = no `integrity` attribute. Only set it for a versioned, immutable URL.
+   */
+  scriptIntegrity?: string
   /** Edge base URL. The widget calls `/identity` and `/llm` below it. */
   apiUrl: string
 }
@@ -101,6 +106,23 @@ export const attr = (value: string): string =>
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
 
+/** An SRI value the snippet can use: one `sha256`, `sha384` or `sha512` hash in base64. */
+export function usableIntegrity(value: string): boolean {
+  // Length bound to the algorithm: 32, 48 or 64 bytes in base64.
+  return /^(sha256-[A-Za-z0-9+/]{43}=|sha384-[A-Za-z0-9+/]{64}|sha512-[A-Za-z0-9+/]{86}==)$/.test(
+    value
+  )
+}
+
+/** The attributes of the script tag: src, and with a usable hash `integrity` + `crossorigin`. */
+function scriptAttributes(target: EmbedTarget): string {
+  const src = `src="${attr(target.scriptUrl)}"`
+  const integrity = target.scriptIntegrity?.trim() ?? ''
+  if (!usableIntegrity(integrity)) return src
+  // crossorigin="anonymous": a CORS request without cookies, as SRI on another origin needs.
+  return `${src} integrity="${attr(integrity)}" crossorigin="anonymous"`
+}
+
 /**
  * The embed snippet: one module script, one element, and the hook that hands in the user token.
  * It carries no setting: the widget loads them from the studio (widgets#34), and an attribute
@@ -108,7 +130,7 @@ export const attr = (value: string): string =>
  */
 export function buildSnippet(appId: string, target: EmbedTarget): string {
   return [
-    `<script type="module" src="${attr(target.scriptUrl)}"></script>`,
+    `<script type="module" ${scriptAttributes(target)}></script>`,
     `<synthwerk-chat app-id="${attr(appId)}" api-url="${attr(target.apiUrl)}"></synthwerk-chat>`,
     '<script type="module">',
     '  // After sign-in and sign-out: hand in the access token of the signed-in user, or null.',
