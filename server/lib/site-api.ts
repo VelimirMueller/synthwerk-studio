@@ -32,8 +32,6 @@ export const CACHE_MAX_AGE = 60
 /** Seconds a CDN may serve a stale copy while it asks again in the background. */
 export const STALE_WHILE_REVALIDATE = 300
 export const LIVE_CACHE_CONTROL = `public, max-age=${CACHE_MAX_AGE}, stale-while-revalidate=${STALE_WHILE_REVALIDATE}`
-/** A missing page is cached for a short time too, so a probe does not reach the database often. */
-export const MISSING_CACHE_CONTROL = 'public, max-age=30'
 
 const STATUS_TEXT: Record<number, string> = {
   404: 'Not Found',
@@ -48,11 +46,11 @@ export class SiteApi {
     const locale = getRouterParam(event, 'locale') ?? ''
     const slug = getRouterParam(event, 'slug') ?? ''
     if (!LOCALES.includes(locale as Locale) || !SLUG_PATTERN.test(slug)) {
-      throw this.notFound(event)
+      throw notFound()
     }
     const { site, store: open } = this.deps
-    if (site instanceof SiteConfigError) throw unavailable(event, 'site_not_configured')
-    if (open instanceof BuilderConfigError) throw unavailable(event, 'site_not_configured')
+    if (site instanceof SiteConfigError) throw fail(503, 'site_not_configured')
+    if (open instanceof BuilderConfigError) throw fail(503, 'site_not_configured')
     let page: Awaited<ReturnType<BuilderStore['getLive']>>
     try {
       const store = await open()
@@ -60,13 +58,16 @@ export class SiteApi {
     } catch (err) {
       if (isError(err)) throw err
       // The live version went away between the two reads (a race with a delete): not found.
-      if (err instanceof BuilderStoreError) throw this.notFound(event)
+      if (err instanceof BuilderStoreError) {
+        this.deps.log?.('warn', `live page read refused (${err.code})`)
+        throw notFound()
+      }
       const code = (err as { code?: unknown } | null)?.code
       const name = err instanceof Error ? err.name : 'error'
       this.deps.log?.('warn', `database call failed (${typeof code === 'string' ? code : name})`)
-      throw unavailable(event, 'site_unavailable')
+      throw fail(503, 'site_unavailable')
     }
-    if (!page) throw this.notFound(event)
+    if (!page) throw notFound()
     const body: LivePage = {
       slug,
       locale: locale as Locale,
@@ -84,11 +85,6 @@ export class SiteApi {
     }
     return body
   }
-
-  private notFound(event: H3Event) {
-    setResponseHeader(event, 'cache-control', MISSING_CACHE_CONTROL)
-    return fail(404, 'page_not_found')
-  }
 }
 
 /** A strong ETag: sha256 of the JSON body, base64url. Same content, same tag on every server. */
@@ -105,10 +101,8 @@ export function matches(header: string | undefined, etag: string): boolean {
     .some((tag) => tag === '*' || tag === etag)
 }
 
-function unavailable(event: H3Event, code: string) {
-  setResponseHeader(event, 'cache-control', 'no-store')
-  return fail(503, code)
-}
+// Errors carry no cache header of their own: the Nitro error handler sends `no-cache`.
+const notFound = () => fail(404, 'page_not_found')
 
 function fail(status: number, code: string) {
   const text = STATUS_TEXT[status] ?? 'Error'

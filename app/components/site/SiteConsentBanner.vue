@@ -24,7 +24,7 @@ watch(
 
 function choose(analytics: boolean) {
   save({ analytics }, texts.value.consent.saved(analytics))
-  returnFocus?.focus()
+  if (returnFocus?.isConnected) returnFocus.focus()
   returnFocus = null
 }
 </script>

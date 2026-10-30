@@ -83,7 +83,7 @@ export default defineNuxtConfig({
     '/api/builder/**': { headers: { 'cache-control': 'no-store' } },
     '/api/me': { headers: { 'cache-control': 'no-store' } },
     // The public site: same HTML for every visitor (the consent banner is client side), so a CDN
-    // may keep it for a short time. /api/site sets its own headers and an ETag (server/lib/site-api.ts).
+    // may keep it for a short time. A new locale in shared/sections.ts LOCALES needs its two rules here. /api/site sets its own headers and an ETag (server/lib/site-api.ts).
     '/de': { headers: { 'cache-control': SITE_HTML_CACHE } },
     '/de/**': { headers: { 'cache-control': SITE_HTML_CACHE } },
     '/en': { headers: { 'cache-control': SITE_HTML_CACHE } },

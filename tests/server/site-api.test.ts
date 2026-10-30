@@ -7,7 +7,6 @@ import { BuilderStore } from '../../server/lib/builder-store'
 import {
   etagOf,
   LIVE_CACHE_CONTROL,
-  MISSING_CACHE_CONTROL,
   matches,
   SiteApi,
   type SiteApiDeps
@@ -107,7 +106,7 @@ describe('GET /api/site/pages/{locale}/{slug}', () => {
     const res = await site()('/api/site/pages/en/soon')
     expect(res.status).toBe(404)
     expect(await code(res)).toBe('page_not_found')
-    expect(res.headers.get('cache-control')).toBe(MISSING_CACHE_CONTROL)
+    expect(res.headers.get('cache-control')).toBeNull()
   })
 
   it('serves the site org only, never another org', async () => {
@@ -184,7 +183,7 @@ describe('GET /api/site/pages/{locale}/{slug}', () => {
       const res = await get('/api/site/pages/en/home')
       expect(res.status).toBe(503)
       expect(await code(res)).toBe('site_not_configured')
-      expect(res.headers.get('cache-control')).toBe('no-store')
+      expect(res.headers.get('cache-control')).toBeNull()
     }
   })
 
@@ -197,7 +196,7 @@ describe('GET /api/site/pages/{locale}/{slug}', () => {
     })('/api/site/pages/en/home')
     expect(res.status).toBe(503)
     expect(await code(res)).toBe('site_unavailable')
-    expect(res.headers.get('cache-control')).toBe('no-store')
+    expect(res.headers.get('cache-control')).toBeNull()
     expect(logs).toEqual(['warn: database call failed (ECONNREFUSED)'])
     expect(logs.join()).not.toContain('very-secret-pw')
 
