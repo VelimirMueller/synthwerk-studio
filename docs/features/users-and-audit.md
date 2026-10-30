@@ -42,7 +42,7 @@ updated: 2026-10-30
 ## How to use
 
 - Set `NUXT_IDENTITY_URL` to the identity base URL. Local stack: `http://localhost:8080/identity` (the edge).
-- Sign in. Open `/users` or `/audit` from the navigation (Me, Users, Audit).
+- Sign in. Open `/users` or `/audit` from the navigation (Me, Apps, Users, Audit).
 - Invite: type the email, choose the role, select **Send invite**. The invitation shows under **Pending invitations**. The user shows in the users list after the first sign-in.
 - The answer is the same for every email: the page never shows whether the email has an account.
 - Revoke: select **Revoke** on a pending invitation.

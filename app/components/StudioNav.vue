@@ -2,6 +2,7 @@
 // The studio navigation. Add a page here with one line.
 const links = [
   { to: '/me', label: 'Me' },
+  { to: '/apps', label: 'Apps' },
   { to: '/users', label: 'Users' },
   { to: '/audit', label: 'Audit' }
 ]
