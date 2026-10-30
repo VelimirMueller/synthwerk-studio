@@ -4,7 +4,7 @@ slug: sign-in
 status: beta
 epic: E2
 owner: studio
-paths: ["server/api/auth/**", "server/lib/auth.ts", "server/lib/claims.ts", "server/lib/config.ts", "server/lib/oidc.ts", "server/lib/seal.ts", "server/lib/session.ts", "server/utils/auth.ts", "server/middleware/**", "app/middleware/**", "app/composables/useAuthSession.ts", "app/pages/index.vue", "app/pages/me.vue"]
+paths: ["server/api/auth/**", "server/lib/auth.ts", "server/lib/claims.ts", "server/lib/config.ts", "server/lib/oidc.ts", "server/lib/seal.ts", "server/lib/session.ts", "server/utils/auth.ts", "server/middleware/**", "app/middleware/**", "app/composables/useAuthSession.ts", "app/pages/index.vue", "app/pages/me.vue", "app/assets/app.css"]
 api: ["GET /api/auth/login", "GET /api/auth/callback", "GET /api/auth/session", "POST /api/auth/logout"]
 events: []
 mcp: []
