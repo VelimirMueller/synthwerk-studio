@@ -41,7 +41,7 @@ updated: 2026-10-30
 |---|---|---|
 | Settings | `NUXT_SITE_ORG_ID`, `NUXT_SITE_ORIGIN`, `NUXT_MAIL_PROVIDER`, the builder database | 503 `leads_not_configured` |
 | Origin | `Origin` equals `NUXT_SITE_ORIGIN` exactly. No Origin: refused. No CSRF token: there is no session | 403 `origin_refused` |
-| Rate limit | 5 forms per client address in 10 minutes, 60 forms per page per hour, 20 confirms per address in 10 minutes. In memory, per process | 429 `too_many_requests` |
+| Rate limit | 5 forms per client address in 10 minutes, 60 forms per page per hour, 20 confirms per address in 10 minutes. IPv6 counts per /64. In memory, per process, at most 50000 keys; an open window is never dropped, a new key on a full map gets 429 (fail closed). Checked after the body and field checks: a bad or bot form makes no key | 429 `too_many_requests` |
 | Body | 4 KiB, `server/lib/body.ts` | 413 `payload_too_large` |
 | Honeypot | The hidden field `website` is not empty | 202, nothing stored, no mail |
 | Address | One plain address, 254 characters or less | 400 `invalid_email` |
