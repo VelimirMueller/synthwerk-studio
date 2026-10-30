@@ -88,6 +88,7 @@ describe('usableIntegrity', () => {
     ['sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb', true],
     [`sha512-${'A'.repeat(86)}==`, true],
     ['sha1-abc', false],
+    ['sha384-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=', false],
     ['sha384-', false],
     ['sha384-abc def', false],
     ['', false]

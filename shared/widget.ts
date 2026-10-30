@@ -108,7 +108,10 @@ export const attr = (value: string): string =>
 
 /** An SRI value the snippet can use: one `sha256`, `sha384` or `sha512` hash in base64. */
 export function usableIntegrity(value: string): boolean {
-  return /^sha(256|384|512)-[A-Za-z0-9+/]{43,86}={0,2}$/.test(value)
+  // Length bound to the algorithm: 32, 48 or 64 bytes in base64.
+  return /^(sha256-[A-Za-z0-9+/]{43}=|sha384-[A-Za-z0-9+/]{64}|sha512-[A-Za-z0-9+/]{86}==)$/.test(
+    value
+  )
 }
 
 /** The attributes of the script tag: src, and with a usable hash `integrity` + `crossorigin`. */
