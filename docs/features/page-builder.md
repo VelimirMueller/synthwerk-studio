@@ -1,17 +1,17 @@
 ---
-title: Page builder with preview, publish and roll back
+title: Page builder with preview, publish, roll back, unpublish and delete
 slug: page-builder
 status: beta
 epic: E6
 owner: studio
 paths: ["shared/sections.ts", "server/lib/builder-api.ts", "server/lib/builder-config.ts", "server/lib/builder-db.ts", "server/lib/builder-store.ts", "server/lib/builder-relay.ts", "server/lib/builder-nats.ts", "server/lib/uuidv7.ts", "server/plugins/builder-relay.ts", "server/lib/org-admin.ts", "server/lib/body.ts", "server/api/builder/**", "server/utils/builder.ts", "server/utils/builder-store.ts", "app/pages/builder/**", "app/components/builder/**", "app/components/page/**", "app/composables/useBuilderApi.ts", "app/utils/builder.ts"]
-api: ["GET /api/builder/pages", "POST /api/builder/pages", "GET /api/builder/pages/{pageId}", "PUT /api/builder/pages/{pageId}/draft", "POST /api/builder/pages/{pageId}/publish", "POST /api/builder/pages/{pageId}/rollback", "GET /api/builder/pages/{pageId}/versions/{version}", "GET /api/builder/pages/{pageId}/events"]
-events: ["dev.synthwerk.studio.page.created.v1", "dev.synthwerk.studio.page.published.v1", "dev.synthwerk.studio.page.rolled_back.v1"]
+api: ["GET /api/builder/pages", "POST /api/builder/pages", "GET /api/builder/pages/{pageId}", "PUT /api/builder/pages/{pageId}/draft", "POST /api/builder/pages/{pageId}/publish", "POST /api/builder/pages/{pageId}/rollback", "GET /api/builder/pages/{pageId}/versions/{version}", "GET /api/builder/pages/{pageId}/events", "POST /api/builder/pages/{pageId}/unpublish", "DELETE /api/builder/pages/{pageId}", "POST /api/builder/pages/{pageId}/versions/{version}/copy"]
+events: ["dev.synthwerk.studio.page.created.v1", "dev.synthwerk.studio.page.published.v1", "dev.synthwerk.studio.page.rolled_back.v1", "dev.synthwerk.studio.page.unpublished.v1", "dev.synthwerk.studio.page.deleted.v1", "dev.synthwerk.studio.page.version_copied.v1"]
 mcp: []
 updated: 2026-10-30
 ---
 
-# Page builder with preview, publish and roll back
+# Page builder with preview, publish, roll back, unpublish and delete
 
 > **In 30 seconds**
 >
@@ -21,6 +21,8 @@ updated: 2026-10-30
 > - Text is plain, or a small Markdown subset that renders as Vue nodes. No `v-html`.
 > - The studio server owns the data: its own Postgres database (`NUXT_BUILDER_DATABASE_URL`). No other service reads it.
 > - Create, publish and roll back write an event to the page history. A relay sends each event to the bus (`EVT_STUDIO`); identity shows publish and roll back in the org audit list (synthwerk#106).
+> - Owners and admins unpublish a page and copy any published version into the draft. Owners delete a page (synthwerk#108). Each action writes an event.
+> - A lead form section collects addresses with double opt-in: see [leads](leads.md) (synthwerk#105).
 > - Proves the studio part of synthwerk#46. The public site (synthwerk#45) and the live demo (synthwerk#47) render what the builder publishes.
 
 ## Where the data lives
@@ -37,6 +39,7 @@ updated: 2026-10-30
 | `builder_pages` | One row per page: org, slug, locale, the draft (`{ title, sections }`, jsonb), the draft revision, the live version |
 | `builder_page_versions` | One immutable row per published version: page, number (1, 2, 3, …), content, who, when |
 | `builder_events` | Create, publish and roll back. CloudEvents fields (`id` UUIDv7, `type`, `time`, `actor`, `subject`, `data`) and `identity_org_id`. The outbox of the relay: `relayed_at` is set when the event is on the bus, `relay_error` when a row can never be an event |
+| `builder_leads` | Leads of the lead forms: pending (token hash, expiry) or confirmed. See [leads](leads.md) |
 | `builder_schema` | The applied migration versions |
 
 ## What it does
@@ -57,13 +60,16 @@ updated: 2026-10-30
 | `POST /api/builder/pages/{pageId}/rollback` | `{ version }` | Page. That version is live again |
 | `GET /api/builder/pages/{pageId}/versions/{version}` | | The content of one published version |
 | `GET /api/builder/pages/{pageId}/events` | | `{ items }`: the 50 newest events of the page |
+| `POST /api/builder/pages/{pageId}/unpublish` | | Page with `liveVersion` null. Every version stays |
+| `DELETE /api/builder/pages/{pageId}` | `{ slug }` | 204. Owners only. `slug` must be the slug of the page |
+| `POST /api/builder/pages/{pageId}/versions/{version}/copy` | `{ revision }` | Page. The draft is that version, `draftRevision` + 1. Nothing goes live |
 
 The BFF checks in this order and stops at the first refusal:
 
 | Step | Check | Refusal |
 |---|---|---|
 | 1 | Session (`AuthService.current`) | 401 `unauthenticated` |
-| 2 | CSRF on PUT and POST: `Origin` and `x-csrf-token` | 403 `csrf_failed` |
+| 2 | CSRF on PUT, POST and DELETE: `Origin` and `x-csrf-token` | 403 `csrf_failed` |
 | 3 | `NUXT_BUILDER_DATABASE_URL` is set | 503 `builder_not_configured` |
 | 4 | The token gives `owner` or `admin` in the session org | 403 `forbidden` |
 | 5 | The org id matches `^[A-Za-z0-9_-]{1,64}$`, the subject `^[A-Za-z0-9_-]{1,128}$` | 403 `forbidden` |
@@ -77,6 +83,12 @@ The BFF checks in this order and stops at the first refusal:
 - Roll back makes any published version live again. It does not change the draft. The live version gives 409 `already_live`.
 - "Done looks like": publish a change, roll it back, the old version shows. `tests/server/builder-api.test.ts` runs exactly this.
 
+## Unpublish, delete, copy into draft (synthwerk#108)
+
+- **Unpublish** clears the live version. Every version stays. The public site answers 404 for the page (within the 60 s cache of `/api/site`). Publish or roll back brings it back. A page that is not live gives 409 `not_live`.
+- **Delete** removes the page with its draft and versions. Owners only (token role `owner` and the stored owner or admin membership): an admin gets 403 `owner_required`. The editor asks for the slug, and the server checks it (409 `confirm_mismatch`). The page events stay in `builder_events`: the audit trail outlives the page. Confirmed leads of the page stay with slug, locale and version; pending leads of the page are deleted.
+- **Copy into draft** puts the content of a published version into the draft. It needs the draft `revision`, like a save (409 `draft_conflict`). The editor asks first when the draft has unsaved changes.
+
 ## Section catalogue
 
 | Type | Fields | ui-vue |
@@ -87,6 +99,7 @@ The BFF checks in this order and stops at the first refusal:
 | `pricing` | title, 1 to 4 plans (name, price, period, up to 10 features, recommended, button) | `SwCard`, `SwPill` |
 | `faq` | title, 1 to 12 questions with an answer (Markdown) | `<details>`, `SwDivider` |
 | `cta` | title, text (Markdown), button | `SwCard` |
+| `lead` | title, text (Markdown), name field on or off, consent text (Markdown), button label. One per page. See [leads](leads.md) | `SwCard`, `SwInput`, `SwButton` |
 
 - Markdown subset: paragraphs, line breaks, lists (lines that start with "- "), `**bold**`, `*italic*`, `[text](link)`. Everything else is text.
 - Links and buttons: `https://`, `http://`, `mailto:`, `/path` or `#anchor`. No `javascript:`, `data:`, `//host` or user info. The server refuses a bad button link. A bad Markdown link keeps its text only. At render, links also pass `safeHref()` of `@synthwerk/ui-vue`.
@@ -101,7 +114,8 @@ The BFF checks in this order and stops at the first refusal:
 - Create a page: title, slug (`/pricing`), language.
 - Add sections, edit them, move them up and down. **Preview draft** shows the page as it will look.
 - **Save draft**, then **Publish**. The table **Published versions** shows every version.
-- **View** shows a published version. **Roll back** makes it live again.
+- **View** shows a published version. **Roll back** makes it live again. **Copy into draft** starts the draft from it.
+- **Unpublish** takes the page off the public site. **Delete page** (owners) asks for the slug.
 
 ## Rules and limits
 
@@ -124,6 +138,9 @@ The BFF checks in this order and stops at the first refusal:
 | `dev.synthwerk.studio.page.created.v1` | A page is created. Data: `page_id`, `slug`, `locale` |
 | `dev.synthwerk.studio.page.published.v1` | A version is published. Data: `page_id`, `slug`, `locale`, `version`, `previous_version` |
 | `dev.synthwerk.studio.page.rolled_back.v1` | An older version is live again. Same data |
+| `dev.synthwerk.studio.page.unpublished.v1` | The page is off the site. Data: `page_id`, `slug`, `locale`, `previous_version` |
+| `dev.synthwerk.studio.page.deleted.v1` | The page is deleted. Same data as unpublished |
+| `dev.synthwerk.studio.page.version_copied.v1` | A version is copied into the draft. Data: `page_id`, `slug`, `locale`, `version` |
 
 - The schemas are in `synthwerk-contracts` (`events/studio`, tag `go/v0.12.0`). Draft saves write no event.
 - The events go to `builder_events` in the transaction of the change and show in the page history.
@@ -157,6 +174,9 @@ The BFF checks in this order and stops at the first refusal:
 | 409 | `draft_conflict` | The revision is not the current one |
 | 409 | `no_changes` | Publish of a draft equal to the live version |
 | 409 | `already_live` | Roll back to the live version |
+| 403 | `owner_required` | Delete by an admin |
+| 409 | `not_live` | Unpublish of a page that is not live |
+| 409 | `confirm_mismatch` | Delete with a slug that is not the slug of the page |
 | 413 | `payload_too_large` | Body over 256 KiB |
 | 502 | `upstream_unavailable` | Identity could not confirm the membership |
 | 503 | `builder_not_configured` | `NUXT_BUILDER_DATABASE_URL` is missing or not a `postgres://` URL |
@@ -181,13 +201,14 @@ The BFF checks in this order and stops at the first refusal:
   - Backoff logs without secrets, the start with retries, the relay settings.
 - `tests/server/builder-nats.test.ts`: opt-in against a real NATS (`BUILDER_TEST_NATS_URL`): stream create and update, a duplicate id, a subject outside `evt.studio.>` refused for the studio user.
 - `tests/app/builder.test.ts`: the page texts.
+- `tests/server/builder-api.test.ts` (synthwerk#108): unpublish, delete (owner, admin, slug check, event stays), copy (revision, missing version).
 
 ## Open points
 
 - The public site reads the live version through `GET /api/site/pages/{locale}/{slug}` (synthwerk#109). See [public-site](public-site.md).
-- Lead capture with double opt-in (acceptance criterion of #46) is not in this change.
 - No Postgres for the studio in the compose stack and the prd setup yet (`synthwerk-infra`).
-- No delete or unpublish of a page. No copy of a version into the draft.
+- The three new event types need schemas in `synthwerk-contracts` before a relay sends them (synthwerk#106).
+- Delete checks the owner role in the token; identity confirms owner or admin. A demoted owner keeps delete until the token expires (5 minutes).
 - No Playwright e2e in this change. Add it with the local stack (synthwerk-e2e).
 
 ## Changes
@@ -196,3 +217,4 @@ The BFF checks in this order and stops at the first refusal:
 |---|---|
 | 2026-10-30 | First version: section editor, preview, publish, roll back, page history (synthwerk#46). |
 | 2026-10-30 | The relay sends `builder_events` to `EVT_STUDIO`; identity shows them in the org audit list. Migration 2: `identity_org_id`, `relay_error`; event ids are UUIDv7 (synthwerk#106). |
+| 2026-10-30 | Unpublish, delete, copy a version into the draft (synthwerk#108). Lead form section (synthwerk#105). |

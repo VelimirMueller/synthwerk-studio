@@ -65,6 +65,38 @@ export const MIGRATIONS: readonly (readonly string[])[] = [
     `alter table builder_events add constraint builder_events_relayable
        check (identity_org_id is not null or relay_error is not null)`,
     'create index builder_events_unrelayed on builder_events (seq) where relayed_at is null'
+  ],
+  // 3 (synthwerk#105): leads with double opt-in. One row per org and address. A pending row has
+  // the sha256 of its confirm token and an expiry; the confirm clears both. The page link goes
+  // to null when the page is deleted: slug, locale and version stay for the owner.
+  [
+    `create table builder_leads (
+      id uuid primary key,
+      seq bigint generated always as identity unique,
+      org_id text not null,
+      page_id uuid references builder_pages (id) on delete set null,
+      slug text not null,
+      locale text not null,
+      section_id text not null,
+      page_version integer not null,
+      email text not null,
+      name text not null,
+      consent_text text not null,
+      status text not null check (status in ('pending', 'confirmed')),
+      token_hash text unique,
+      created_at timestamptz not null,
+      expires_at timestamptz,
+      confirmed_at timestamptz,
+      constraint builder_leads_pending check (
+        (status = 'pending' and token_hash is not null and expires_at is not null
+          and confirmed_at is null)
+        or (status = 'confirmed' and token_hash is null and expires_at is null
+          and confirmed_at is not null)
+      )
+    )`,
+    'create unique index builder_leads_org_email on builder_leads (org_id, lower(email))',
+    "create index builder_leads_expiry on builder_leads (expires_at) where status = 'pending'",
+    'create index builder_leads_org_seq on builder_leads (org_id, seq desc)'
   ]
 ]
 

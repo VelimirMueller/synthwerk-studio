@@ -20,6 +20,8 @@ const locale = isLocale(route.params.locale) ? route.params.locale : 'en'
 const slug =
   typeof route.params.slug === 'string' && route.params.slug ? route.params.slug : HOME_SLUG
 const legal = legalPageOf(locale, slug)
+// The lead form of the page sends with this locale and slug (synthwerk#105).
+provide<SitePageContext>(SITE_PAGE_KEY, { locale, slug })
 const data = legal ? null : await useLivePage(locale, slug)
 
 const title = computed(() =>

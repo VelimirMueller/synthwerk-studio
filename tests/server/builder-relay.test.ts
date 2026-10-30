@@ -295,7 +295,7 @@ describe('toCloudEvent', () => {
     expect(toCloudEvent(row, SOURCE).time).toBe('2026-10-30T12:00:00.000Z')
   })
   it.each([
-    ['unknown type', { type: 'dev.synthwerk.studio.page.deleted.v1' }],
+    ['unknown type', { type: 'dev.synthwerk.studio.page.archived.v1' }],
     ['id is not a UUIDv7', { id: '6f1c2a9e-1b2c-4d3e-8f4a-5b6c7d8e9f00' }],
     ['no identity org id', { identity_org_id: null }],
     ['no identity org id', { identity_org_id: 'org-1' }],

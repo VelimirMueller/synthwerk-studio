@@ -38,6 +38,7 @@ updated: 2026-10-30
 | `/de/impressum`, `/en/imprint` | Imprint placeholder |
 | `/de/datenschutz`, `/en/privacy` | Privacy placeholder |
 | `/de/cookies`, `/en/cookies` | Cookie placeholder, technical cookie facts, cookie settings |
+| `/de/confirm`, `/en/confirm` | Confirm page of the lead form (synthwerk#105, [leads](leads.md)). A builder page with the slug `confirm` never shows |
 
 - A legal slug always shows the static legal page. A builder page with the same slug never shows.
 - The language link goes to the same legal page in the other language, else to the other start page.
@@ -121,3 +122,4 @@ updated: 2026-10-30
 | Date | Change |
 |---|---|
 | 2026-10-30 | First version: live read route, public SSR pages, legal placeholders, consent banner (synthwerk#109, #45). |
+| 2026-10-30 | Confirm page of the lead form; an unpublished page answers 404 (synthwerk#105, #108). |
