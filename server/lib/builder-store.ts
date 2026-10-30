@@ -272,8 +272,8 @@ export class BuilderStore {
   ): Promise<PageSummary> {
     return this.db.transaction(async (tx) => {
       const page = await this.lockPage(tx, orgId, pageId)
-      const found = await tx.query<{ content: unknown }>(
-        'select content from builder_page_versions where page_id = $1 and version = $2',
+      const found = await tx.query(
+        'select 1 from builder_page_versions where page_id = $1 and version = $2',
         [pageId, version]
       )
       const target = found.rows[0]
@@ -287,12 +287,8 @@ export class BuilderStore {
         version,
         previous_version: page.live_version
       })
-      const content = json<PageContent>(target.content)
-      return {
-        ...toSummary(page),
-        liveVersion: version,
-        changed: JSON.stringify(content) !== JSON.stringify(json<PageContent>(page.draft))
-      }
+      const { rows } = await tx.query<PageRow>(`${PAGE_SELECT} where p.id = $1`, [pageId])
+      return toSummary(rows[0] as PageRow)
     })
   }
 

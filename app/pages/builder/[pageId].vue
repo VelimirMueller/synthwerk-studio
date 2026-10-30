@@ -58,6 +58,7 @@ async function load() {
 
 /** Runs one write, then reads the page and its history again. */
 async function act(name: string, call: () => Promise<unknown>, done: string) {
+  if (busy.value) return
   busy.value = name
   error.value = ''
   notice.value = ''
@@ -129,7 +130,16 @@ onBeforeRouteLeave(() => {
   if (dirty.value && !window.confirm('The draft has unsaved changes. Leave the page?')) return false
 })
 
-onMounted(() => load())
+/** A reload or a closed tab also asks while the draft has unsaved changes. */
+function onUnload(event: BeforeUnloadEvent) {
+  if (dirty.value) event.preventDefault()
+}
+
+onMounted(() => {
+  window.addEventListener('beforeunload', onUnload)
+  void load()
+})
+onBeforeUnmount(() => window.removeEventListener('beforeunload', onUnload))
 </script>
 
 <template>

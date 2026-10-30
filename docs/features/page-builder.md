@@ -4,7 +4,7 @@ slug: page-builder
 status: beta
 epic: E6
 owner: studio
-paths: ["shared/sections.ts", "server/lib/builder-api.ts", "server/lib/builder-config.ts", "server/lib/builder-db.ts", "server/lib/builder-store.ts", "server/lib/org-admin.ts", "server/api/builder/**", "server/utils/builder.ts", "app/pages/builder/**", "app/components/builder/**", "app/components/page/**", "app/composables/useBuilderApi.ts", "app/utils/builder.ts"]
+paths: ["shared/sections.ts", "server/lib/builder-api.ts", "server/lib/builder-config.ts", "server/lib/builder-db.ts", "server/lib/builder-store.ts", "server/lib/org-admin.ts", "server/lib/body.ts", "server/api/builder/**", "server/utils/builder.ts", "app/pages/builder/**", "app/components/builder/**", "app/components/page/**", "app/composables/useBuilderApi.ts", "app/utils/builder.ts"]
 api: ["GET /api/builder/pages", "POST /api/builder/pages", "GET /api/builder/pages/{pageId}", "PUT /api/builder/pages/{pageId}/draft", "POST /api/builder/pages/{pageId}/publish", "POST /api/builder/pages/{pageId}/rollback", "GET /api/builder/pages/{pageId}/versions/{version}", "GET /api/builder/pages/{pageId}/events"]
 events: []
 mcp: []
@@ -66,9 +66,8 @@ The BFF checks in this order and stops at the first refusal:
 | 3 | `NUXT_BUILDER_DATABASE_URL` is set | 503 `builder_not_configured` |
 | 4 | The token gives `owner` or `admin` in the session org | 403 `forbidden` |
 | 5 | The org id matches `^[A-Za-z0-9_-]{1,64}$`, the subject `^[A-Za-z0-9_-]{1,128}$` | 403 `forbidden` |
-| 6 | Body size on writes: 256 KiB or less | 413 `payload_too_large` |
-| 7 | Identity confirms the stored membership (same call as the label admin, `server/lib/org-admin.ts`) | 503 `identity_not_configured`, 401, 403, 502 `upstream_unavailable` |
-| 8 | The database is reachable and migrated | 503 `builder_unavailable` |
+| 6 | Identity confirms the stored membership (same call as the label admin, `server/lib/org-admin.ts`) | 503 `identity_not_configured`, 401, 403, 502 `upstream_unavailable` |
+| 7 | The database is reachable and migrated | 503 `builder_unavailable` |
 
 ## Draft, publish, roll back
 
@@ -111,7 +110,7 @@ The BFF checks in this order and stops at the first refusal:
 | Sections | 20 per page. Section id `^[a-z0-9]{1,24}$`, unique on the page |
 | Text | One-line texts 120 characters or less, no control characters. Markdown texts 2000 characters or less |
 | Links | 500 characters or less |
-| Body | 256 KiB or less |
+| Body | 256 KiB or less. Read after the checks above, as a stream (`server/lib/body.ts`): the read stops with 413 as soon as the cap is passed, also for a chunked body without Content-Length |
 | Logs | The error code only (`database call failed (ECONNREFUSED)`). No URL, no SQL, no page text |
 | Cache | `/api/builder/**` has `Cache-Control: no-store` |
 | Page | Text only, no `v-html`. Leaving the editor with unsaved changes asks first |

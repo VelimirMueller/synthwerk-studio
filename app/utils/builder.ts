@@ -50,7 +50,9 @@ export function builderEventText(type: string, data: Record<string, unknown>): s
   const v = typeof data.version === 'number' ? `v${data.version}` : ''
   if (type === 'dev.synthwerk.studio.page.created.v1') return 'Created the page'
   if (type === 'dev.synthwerk.studio.page.published.v1') return `Published ${v}`.trim()
-  if (type === 'dev.synthwerk.studio.page.rolled_back.v1') return `Rolled back to ${v}`.trim()
+  if (type === 'dev.synthwerk.studio.page.rolled_back.v1') {
+    return v ? `Rolled back to ${v}` : 'Rolled back to an earlier version'
+  }
   return type
 }
 

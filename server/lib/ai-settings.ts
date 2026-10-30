@@ -2,8 +2,9 @@
 // llm with the session's access token; the browser never sees a token. llm acts in the token's
 // org and checks the role (owner or admin), the bounds and the version again. The checks here
 // only keep junk out.
-import { createError, type H3Event, readBody } from 'h3'
+import { createError, type H3Event } from 'h3'
 import type { SessionSource } from './apps'
+import { readJsonBody } from './body'
 import { LlmConfigError, type RawLlmConfig, readLlmConfig } from './llm-config'
 
 export interface AiSettingsBounds {
@@ -318,7 +319,7 @@ export async function runAiSettingsRoute(
     })
   }
   if (route.write) deps.auth.assertCsrfToken(event, record)
-  const body = route.write ? await readBody(event) : undefined
+  const body = route.write ? await readJsonBody(event) : undefined
   try {
     return await route.run(deps.api(), { token: record.tokens.accessToken, body })
   } catch (err) {

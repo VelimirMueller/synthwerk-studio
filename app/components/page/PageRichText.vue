@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import { safeHref } from '@synthwerk/ui-vue'
 // Renders the Markdown subset of a section text as nodes (shared/sections.ts parseRichText).
-// No v-html: every text goes through Vue text interpolation.
+// No v-html: every text goes through Vue text interpolation. Links pass safeHref() too.
 import { parseRichText } from '#shared/sections'
 
 const props = defineProps<{ text: string }>()
@@ -14,7 +15,7 @@ const blocks = computed(() => parseRichText(props.text))
         <br v-if="node.type === 'br'">
         <strong v-else-if="node.type === 'strong'">{{ node.text }}</strong>
         <em v-else-if="node.type === 'em'">{{ node.text }}</em>
-        <a v-else-if="node.type === 'link'" :href="node.href">{{ node.text }}</a>
+        <a v-else-if="node.type === 'link'" :href="safeHref(node.href)">{{ node.text }}</a>
         <template v-else>{{ node.text }}</template>
       </template>
     </p>
@@ -23,7 +24,7 @@ const blocks = computed(() => parseRichText(props.text))
         <template v-for="(node, n) in item" :key="n">
           <strong v-if="node.type === 'strong'">{{ node.text }}</strong>
           <em v-else-if="node.type === 'em'">{{ node.text }}</em>
-          <a v-else-if="node.type === 'link'" :href="node.href">{{ node.text }}</a>
+          <a v-else-if="node.type === 'link'" :href="safeHref(node.href)">{{ node.text }}</a>
           <template v-else-if="node.type === 'text'">{{ node.text }}</template>
         </template>
       </li>

@@ -1,8 +1,9 @@
 // The /api/labels BFF routes (synthwerk#44, docs/features/label-admin.md). Vision trusts the org
 // id in the path and takes only the service token, so this class is the authorization point:
 // session, CSRF, token role, then the stored membership in identity. The browser never sees a token.
-import { createError, getRouterParam, type H3Event, readBody, setResponseStatus } from 'h3'
+import { createError, getRouterParam, type H3Event, setResponseStatus } from 'h3'
 import type { AuthService } from './auth'
+import { readJsonBody } from './body'
 import { isOrgAdmin } from './health'
 import type { IdentityConfig, IdentityConfigError } from './identity-config'
 import {
@@ -130,12 +131,7 @@ function notConfigured(code: string, err: Error) {
 
 /** The JSON body as an object. Anything else counts as an empty body (the check refuses it). */
 async function readJson(event: H3Event): Promise<Record<string, unknown>> {
-  let body: unknown
-  try {
-    body = await readBody(event)
-  } catch {
-    throw fail(400, 'invalid_request')
-  }
+  const body = await readJsonBody(event)
   return body && typeof body === 'object' && !Array.isArray(body)
     ? (body as Record<string, unknown>)
     : {}

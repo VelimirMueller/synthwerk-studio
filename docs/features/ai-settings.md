@@ -114,3 +114,4 @@ updated: 2026-10-30
 | Date | Change |
 |---|---|
 | 2026-10-30 | First version (synthwerk#39). |
+| 2026-10-30 | Write routes read the JSON body through `server/lib/body.ts`: 64 KiB cap, read as a stream, 413 `payload_too_large` as soon as the cap is passed (also chunked). |

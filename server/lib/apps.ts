@@ -1,8 +1,9 @@
 // Apps of the signed-in user's org, through identity (synthwerk#38). The BFF calls identity
 // with the session's access token; the browser never sees a token. Identity checks roles,
 // origins, settings and the apps-per-org limit again; the checks here only keep junk out.
-import { createError, type H3Event, readBody } from 'h3'
+import { createError, type H3Event } from 'h3'
 import { readSettings, settingsFromIdentity, type WidgetSettings } from '../../shared/widget'
+import { readJsonBody } from './body'
 import type { SessionRecord } from './session'
 
 export interface StudioApp {
@@ -242,7 +243,7 @@ export async function asMember<T>(
     })
   }
   if (write) deps.auth.assertCsrfToken(event, record)
-  const body = write && event.method !== 'DELETE' ? await readBody(event) : undefined
+  const body = write && event.method !== 'DELETE' ? await readJsonBody(event) : undefined
   try {
     const token = record.tokens.accessToken
     const orgId = await deps.api.orgId(token)

@@ -49,6 +49,9 @@ describe('builderEventText', () => {
       'Rolled back to v1'
     )
     expect(builderEventText('dev.synthwerk.studio.page.published.v1', {})).toBe('Published')
+    expect(builderEventText('dev.synthwerk.studio.page.rolled_back.v1', {})).toBe(
+      'Rolled back to an earlier version'
+    )
     expect(builderEventText('x.y', {})).toBe('x.y')
   })
 })

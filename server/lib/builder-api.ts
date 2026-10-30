@@ -1,15 +1,7 @@
 // The /api/builder BFF routes (synthwerk#46, docs/features/page-builder.md). The studio server
 // owns the builder data, so this class is the authorization point: session, CSRF on writes,
 // database settings, token role, org key, then the stored membership in identity.
-import {
-  createError,
-  getHeader,
-  getRouterParam,
-  type H3Event,
-  isError,
-  readBody,
-  setResponseStatus
-} from 'h3'
+import { createError, getRouterParam, type H3Event, isError, setResponseStatus } from 'h3'
 import {
   ContentError,
   checkContent,
@@ -19,6 +11,7 @@ import {
   SLUG_PATTERN
 } from '../../shared/sections'
 import type { AuthService } from './auth'
+import { readJsonBody } from './body'
 import { BuilderConfigError } from './builder-config'
 import { type BuilderStore, BuilderStoreError } from './builder-store'
 import { isOrgAdmin } from './health'
@@ -173,7 +166,6 @@ export class BuilderApi {
     const orgId = record.identity.org.id
     const sub = record.identity.user.sub
     if (!ORG_PATTERN.test(orgId) || !SUB_PATTERN.test(sub)) throw fail(403, 'forbidden')
-    if (unsafe) checkSize(event)
     await this.confirmAdmin(record)
     let store: BuilderStore
     try {
@@ -228,11 +220,6 @@ function positiveInt(value: unknown, field: string): number {
   return value
 }
 
-function checkSize(event: H3Event) {
-  const length = Number(getHeader(event, 'content-length') ?? '0')
-  if (Number.isFinite(length) && length > MAX_BODY_BYTES) throw fail(413, 'payload_too_large')
-}
-
 function fail(status: number, code: string, field?: string) {
   const text = STATUS_TEXT[status] ?? 'Error'
   return createError({
@@ -252,17 +239,11 @@ function notConfigured(code: string, message: string) {
   })
 }
 
-/** The JSON body as an object. Anything else is a bad request. */
+/** The JSON body as an object, capped at MAX_BODY_BYTES (lib/body.ts). Anything else is a bad request. */
 async function readJson(event: H3Event): Promise<Record<string, unknown>> {
-  let body: unknown
-  try {
-    body = await readBody(event)
-  } catch {
-    throw new InputError('invalid_request')
-  }
+  const body = await readJsonBody(event, MAX_BODY_BYTES)
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     throw new InputError('invalid_request')
   }
-  if (JSON.stringify(body).length > MAX_BODY_BYTES) throw fail(413, 'payload_too_large')
   return body as Record<string, unknown>
 }
