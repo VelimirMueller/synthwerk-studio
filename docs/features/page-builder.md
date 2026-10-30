@@ -15,7 +15,8 @@ updated: 2026-10-30
 
 > **In 30 seconds**
 >
-> - `/builder` lists the pages of your org. Owners and admins create a page, edit its sections, preview the draft, publish it and roll back to any published version.
+> - `/builder` lists the pages of your org.
+> - Owners and admins create a page and edit its sections. They preview the draft, publish it and roll back to any published version.
 > - Sections come from a fixed catalogue: hero, proof, benefits, pricing, FAQ, call to action. There is no free HTML.
 > - Text is plain, or a small Markdown subset that renders as Vue nodes. No `v-html`.
 > - The studio server owns the data: its own Postgres database (`NUXT_BUILDER_DATABASE_URL`). No other service reads it.
@@ -150,16 +151,23 @@ The BFF checks in this order and stops at the first refusal:
 
 ## Tests
 
-- `tests/shared/sections.test.ts`: the catalogue check, every refused field, the link rule, the Markdown subset (HTML stays text, unsafe links lose the target).
-- `tests/server/builder-store.test.ts`: the SQL and the migrations on PGlite (in-process Postgres). Create, slug and page limits, org isolation, draft revision, publish, no changes, roll back and forward, events, a failed publish rolls back, the pg pool adapter.
-- `tests/server/builder-api.test.ts`: the BFF routes with the real `AuthService`, the mock OIDC provider, the fake identity and PGlite. Session, CSRF, origin, member role, stale admin, identity down, bad org id, both 503 config cases, database down (log without URL), inputs, the publish and roll back flow, conflicts, body limit.
+- `tests/shared/sections.test.ts`: the catalogue check, every refused field, the link rule, the Markdown subset. HTML stays text. Unsafe links lose the target.
+- `tests/server/builder-store.test.ts`: the SQL and the migrations on PGlite (in-process Postgres).
+  - Create, slug and page limits, org isolation, draft revision.
+  - Publish, no changes, roll back and forward, events.
+  - A failed publish rolls back. The pg pool adapter.
+- `tests/server/builder-api.test.ts`: the BFF routes with the real `AuthService`, the mock OIDC provider, the fake identity and PGlite.
+  - Session, CSRF, origin, member role, stale admin, identity down, bad org id.
+  - Both 503 config cases. Database down: the log has no URL.
+  - Inputs, the publish and roll back flow, conflicts, body limit.
+- `tests/server/body.test.ts`: the body cap on the web and the Node path. A chunked body over the cap stops the read.
 - `tests/app/builder.test.ts`: the page texts.
 
 ## Open points
 
 - The public site (#45) has no route to read the live version yet. `BuilderStore.getLive` is ready for it.
 - Lead capture with double opt-in (acceptance criterion of #46) is not in this change.
-- No bus event and no identity audit entry yet: needs the event schemas in `synthwerk-contracts`, a relay from `builder_events` and the identity consumer.
+- No bus event and no identity audit entry yet. It needs the event schemas in `synthwerk-contracts`, a relay from `builder_events` and an identity consumer.
 - No Postgres for the studio in the compose stack and the prd setup yet (`synthwerk-infra`).
 - No delete or unpublish of a page. No copy of a version into the draft.
 - No Playwright e2e in this change. Add it with the local stack (synthwerk-e2e).
