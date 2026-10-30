@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { BuilderConfigError, readRelayConfig } from '../../server/lib/builder-config'
 import type { Db } from '../../server/lib/builder-db'
-import { isStreamNotFound, STREAM_CONFIG } from '../../server/lib/builder-nats'
+import { INBOX_PREFIX } from '../../server/lib/builder-nats'
 import {
   BuilderRelay,
   eventSource,
@@ -322,12 +322,9 @@ describe('names and ids', () => {
     expect(a.slice(0, 13)).toBe('00000000-03e8')
     expect(() => uuidv7(-1)).toThrow()
   })
-  it('stream config - EVT_STUDIO limits; stream-not-found detection', () => {
-    expect(STREAM_CONFIG.subjects).toEqual(['evt.studio.>'])
-    expect(STREAM_CONFIG.duplicate_window).toBe(120_000_000_000)
-    expect(isStreamNotFound({ api_error: { err_code: 10059 } })).toBe(true)
-    expect(isStreamNotFound(new Error('stream not found'))).toBe(true)
-    expect(isStreamNotFound(new Error('timeout'))).toBe(false)
+  it('inbox prefix - own prefix, not the shared _INBOX', () => {
+    // nats.conf (synthwerk-infra) lets the studio user subscribe to _INBOX_studio.> only.
+    expect(INBOX_PREFIX).toBe('_INBOX_studio')
   })
 })
 

@@ -133,7 +133,9 @@ The BFF checks in this order and stops at the first refusal:
 ## Relay to the bus
 
 - `server/plugins/builder-relay.ts` starts the relay at server start (`server/lib/builder-relay.ts`, `builder-nats.ts`).
-- It applies the builder migrations, connects to NATS, and creates or updates the stream `EVT_STUDIO` (`evt.studio.>`, file storage, 30 days, duplicate window 2 min). Studio owns this stream. While the database or NATS is down, it tries again with backoff (1 s to 30 s).
+- It applies the builder migrations and connects to NATS. While the database or NATS is down, it tries again with backoff (1 s to 30 s).
+- Studio does not create or change the stream `EVT_STUDIO` (`evt.studio.>`, file storage, 30 days, duplicate window 2 min). synthwerk-infra creates it (`bus-init`, `compose/nats/streams/EVT_STUDIO.json`). While the stream is missing, a publish fails and the relay tries again.
+- Least privilege: the studio NATS user may only publish to `evt.studio.>` and subscribe to its own reply prefix `_INBOX_studio.>` (`INBOX_PREFIX`). It cannot read other replies on `_INBOX.>` and cannot change the stream.
 - Each run takes up to 20 rows with `relayed_at` empty, in `seq` order, `FOR UPDATE SKIP LOCKED`, in one transaction. It publishes each row (`Nats-Msg-Id` = event id, `Content-Type: application/cloudevents+json`) and sets `relayed_at`. A publish error stops the run: the rows before stay marked, the rest waits for the next run.
 - Delivery is at least once. A stop between the publish and the commit sends the row again with the same id: JetStream drops it in the 2 min window, identity drops it by id after that.
 - The publishes run inside the transaction that holds the row locks: with the 5 s publish timeout, a slow bus keeps one transaction open 100 s at most.
@@ -179,7 +181,7 @@ The BFF checks in this order and stops at the first refusal:
   - Create, publish, roll back: sent once, in order, then marked; the CloudEvent shape; no page text.
   - A publish error mid-batch, a crash before the commit (same id again), batch size, a row that can never be an event, migration 2.
   - Backoff logs without secrets, the start with retries, the relay settings.
-- `tests/server/builder-nats.test.ts`: opt-in against a real NATS (`BUILDER_TEST_NATS_URL`): stream create and update, a duplicate id, a subject outside `evt.studio.>` refused for the studio user.
+- `tests/server/builder-nats.test.ts`: opt-in against a real NATS (`BUILDER_TEST_NATS_URL`, `EVT_STUDIO` must exist): a duplicate id; for the studio user a subject outside `evt.studio.>`, a stream update and a subscribe to `_INBOX.>` are refused.
 - `tests/app/builder.test.ts`: the page texts.
 
 ## Open points
@@ -196,3 +198,4 @@ The BFF checks in this order and stops at the first refusal:
 |---|---|
 | 2026-10-30 | First version: section editor, preview, publish, roll back, page history (synthwerk#46). |
 | 2026-10-30 | The relay sends `builder_events` to `EVT_STUDIO`; identity shows them in the org audit list. Migration 2: `identity_org_id`, `relay_error`; event ids are UUIDv7 (synthwerk#106). |
+| 2026-10-30 | Least privilege on NATS: studio no longer creates or updates `EVT_STUDIO` (infra creates it) and reads its replies on `_INBOX_studio` (synthwerk#106). |
