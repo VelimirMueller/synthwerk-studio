@@ -10,6 +10,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Locale, PageContent } from '../../shared/sections'
 import type { Db } from './builder-db'
+import { uuidv7 } from './uuidv7'
 
 export const MAX_PAGES_PER_ORG = 50
 export const EVENT_LIST_LIMIT = 50
@@ -20,6 +21,14 @@ export const EVENT_TYPES = {
   published: 'dev.synthwerk.studio.page.published.v1',
   rolledBack: 'dev.synthwerk.studio.page.rolled_back.v1'
 } as const
+
+/** Who changes a page: the audit actor and the identity org UUID of the session org. */
+export interface Author {
+  /** `user:<sub>`. */
+  actor: string
+  /** The identity org id (UUID): `orgid` of the bus event (synthwerk#106). */
+  identityOrgId: string
+}
 
 export interface PageSummary {
   id: string
@@ -129,9 +138,10 @@ export class BuilderStore {
 
   async createPage(
     orgId: string,
-    actor: string,
+    author: Author,
     input: { slug: string; locale: Locale; title: string }
   ): Promise<PageSummary> {
+    const { actor } = author
     return this.db.transaction(async (tx) => {
       // Serializes creates per org, so the page limit holds.
       await tx.query('select pg_advisory_xact_lock(hashtext($1))', [`builder:${orgId}`])
@@ -156,7 +166,7 @@ export class BuilderStore {
          values ($1, $2, $3, $4, $5, 1, $6, $7, null, $6, $7)`,
         [id, orgId, input.slug, input.locale, JSON.stringify(draft), at, actor]
       )
-      await this.event(tx, orgId, actor, EVENT_TYPES.created, id, {
+      await this.event(tx, orgId, author, EVENT_TYPES.created, id, {
         page_id: id,
         slug: input.slug,
         locale: input.locale
@@ -234,9 +244,10 @@ export class BuilderStore {
   async publish(
     orgId: string,
     pageId: string,
-    actor: string,
+    author: Author,
     revision: number
   ): Promise<PageSummary> {
+    const { actor } = author
     return this.db.transaction(async (tx) => {
       const page = await this.lockPage(tx, orgId, pageId)
       if (page.draft_revision !== revision) throw new BuilderStoreError(409, 'draft_conflict')
@@ -252,7 +263,7 @@ export class BuilderStore {
         [pageId, version, JSON.stringify(page.draft), this.now(), actor]
       )
       await tx.query('update builder_pages set live_version = $2 where id = $1', [pageId, version])
-      await this.event(tx, orgId, actor, EVENT_TYPES.published, pageId, {
+      await this.event(tx, orgId, author, EVENT_TYPES.published, pageId, {
         page_id: pageId,
         slug: page.slug,
         locale: page.locale,
@@ -267,7 +278,7 @@ export class BuilderStore {
   async rollback(
     orgId: string,
     pageId: string,
-    actor: string,
+    author: Author,
     version: number
   ): Promise<PageSummary> {
     return this.db.transaction(async (tx) => {
@@ -280,7 +291,7 @@ export class BuilderStore {
       if (!target) throw new BuilderStoreError(404, 'version_not_found')
       if (page.live_version === version) throw new BuilderStoreError(409, 'already_live')
       await tx.query('update builder_pages set live_version = $2 where id = $1', [pageId, version])
-      await this.event(tx, orgId, actor, EVENT_TYPES.rolledBack, pageId, {
+      await this.event(tx, orgId, author, EVENT_TYPES.rolledBack, pageId, {
         page_id: pageId,
         slug: page.slug,
         locale: page.locale,
@@ -368,18 +379,29 @@ export class BuilderStore {
     return { ...row, draft: json<PageContent>(row.draft) }
   }
 
+  /** One builder_events row: the page history and the outbox of the relay (UUIDv7 id). */
   private async event(
     tx: Db,
     orgId: string,
-    actor: string,
+    author: Author,
     type: string,
     subject: string,
     data: Record<string, unknown>
   ): Promise<void> {
+    const at = this.now()
     await tx.query(
-      `insert into builder_events (id, org_id, type, subject, actor, time, data)
-       values ($1, $2, $3, $4, $5, $6, $7)`,
-      [randomUUID(), orgId, type, subject, actor, this.now(), JSON.stringify(data)]
+      `insert into builder_events (id, org_id, identity_org_id, type, subject, actor, time, data)
+       values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        uuidv7(at.getTime()),
+        orgId,
+        author.identityOrgId,
+        type,
+        subject,
+        author.actor,
+        at,
+        JSON.stringify(data)
+      ]
     )
   }
 }

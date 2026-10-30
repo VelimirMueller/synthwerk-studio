@@ -13,7 +13,7 @@ import {
 import type { AuthService } from './auth'
 import { readJsonBody } from './body'
 import { BuilderConfigError } from './builder-config'
-import { type BuilderStore, BuilderStoreError } from './builder-store'
+import { type Author, type BuilderStore, BuilderStoreError } from './builder-store'
 import { isOrgAdmin } from './health'
 import type { IdentityConfig, IdentityConfigError } from './identity-config'
 import { confirmOrgAdmin, OrgAdminError } from './org-admin'
@@ -51,6 +51,8 @@ interface Access {
   orgId: string
   /** `user:<sub>`, the audit actor. */
   actor: string
+  /** The actor and the identity org UUID, for the writes that emit an event. */
+  author: Author
 }
 
 /** A refused input. `field` names the bad field for the editor. */
@@ -73,7 +75,7 @@ export class BuilderApi {
 
   /** POST /api/builder/pages { slug, locale, title } -> 201 */
   create(event: H3Event) {
-    return this.run(event, true, async ({ store, orgId, actor }) => {
+    return this.run(event, true, async ({ store, orgId, author }) => {
       const body = await readJson(event)
       const slug = typeof body.slug === 'string' ? body.slug.trim() : ''
       if (!SLUG_PATTERN.test(slug)) throw new InputError('invalid_request', 'slug')
@@ -85,7 +87,7 @@ export class BuilderApi {
       if (title.length < 1 || title.length > LIMITS.short || hasControl(title)) {
         throw new InputError('invalid_request', 'title')
       }
-      const page = await store.createPage(orgId, actor, { slug, locale: locale as Locale, title })
+      const page = await store.createPage(orgId, author, { slug, locale: locale as Locale, title })
       setResponseStatus(event, 201)
       return page
     })
@@ -109,10 +111,10 @@ export class BuilderApi {
 
   /** POST /api/builder/pages/:pageId/publish { revision } -> 201 */
   publish(event: H3Event) {
-    return this.run(event, true, async ({ store, orgId, actor }) => {
+    return this.run(event, true, async ({ store, orgId, author }) => {
       const id = pageId(event)
       const body = await readJson(event)
-      const page = await store.publish(orgId, id, actor, positiveInt(body.revision, 'revision'))
+      const page = await store.publish(orgId, id, author, positiveInt(body.revision, 'revision'))
       setResponseStatus(event, 201)
       return page
     })
@@ -120,10 +122,10 @@ export class BuilderApi {
 
   /** POST /api/builder/pages/:pageId/rollback { version } */
   rollback(event: H3Event) {
-    return this.run(event, true, async ({ store, orgId, actor }) => {
+    return this.run(event, true, async ({ store, orgId, author }) => {
       const id = pageId(event)
       const body = await readJson(event)
-      return store.rollback(orgId, id, actor, positiveInt(body.version, 'version'))
+      return store.rollback(orgId, id, author, positiveInt(body.version, 'version'))
     })
   }
 
@@ -166,7 +168,7 @@ export class BuilderApi {
     const orgId = record.identity.org.id
     const sub = record.identity.user.sub
     if (!ORG_PATTERN.test(orgId) || !SUB_PATTERN.test(sub)) throw fail(403, 'forbidden')
-    await this.confirmAdmin(record)
+    const identityOrgId = await this.confirmAdmin(record)
     let store: BuilderStore
     try {
       store = await open()
@@ -174,7 +176,8 @@ export class BuilderApi {
       throw this.unavailable(err)
     }
     try {
-      return await action({ store, orgId, actor: `user:${sub}` })
+      const actor = `user:${sub}`
+      return await action({ store, orgId, actor, author: { actor, identityOrgId } })
     } catch (err) {
       if (err instanceof BuilderStoreError) throw fail(err.status, err.code)
       if (err instanceof ContentError) throw fail(400, 'invalid_content', err.path)
@@ -184,9 +187,10 @@ export class BuilderApi {
     }
   }
 
-  private async confirmAdmin(record: SessionRecord): Promise<void> {
+  /** The identity org UUID of the session org, once identity confirmed the stored role. */
+  private async confirmAdmin(record: SessionRecord): Promise<string> {
     try {
-      await confirmOrgAdmin(this.deps.identity, record, this.deps.fetch)
+      return await confirmOrgAdmin(this.deps.identity, record, this.deps.fetch)
     } catch (err) {
       if (!(err instanceof OrgAdminError)) throw err
       if (err.status === 503) throw notConfigured(err.code, err.message)
