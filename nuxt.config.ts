@@ -1,9 +1,12 @@
 // Studio app. The server routes in server/api/auth are the BFF: they run the OIDC code flow
 // with Zitadel and keep every token on the server (synthwerk#95, docs/features/sign-in.md).
+// Public HTML: one minute fresh, five minutes stale while a CDN asks again.
+const SITE_HTML_CACHE = 'public, max-age=60, stale-while-revalidate=300'
+
 export default defineNuxtConfig({
   compatibilityDate: '2026-10-01',
   devtools: { enabled: false },
-  css: ['~/assets/app.css'],
+  css: ['~/assets/app.css', '~/assets/site.css'],
   app: {
     head: {
       htmlAttrs: { lang: 'en', 'data-theme': 'default', 'data-mode': 'dark' },
@@ -44,7 +47,14 @@ export default defineNuxtConfig({
     // The page builder database (synthwerk#46): NUXT_BUILDER_DATABASE_URL, a postgres:// URL owned
     // by the studio server. Env only (it holds the password). Server side only.
     builder: { databaseUrl: '' },
+    // The public site (synthwerk#109, #45): NUXT_SITE_ORG_ID, the org whose live builder pages
+    // /api/site serves. A config value, never a request value. Server side only.
+    site: { orgId: '' },
     public: {
+      // NUXT_PUBLIC_SITE_ENV (dev, stg, prd): every value but prd shows the test system banner.
+      // Umami loads only after an opt-in: NUXT_PUBLIC_SITE_ANALYTICS_SCRIPT_URL (https or a path
+      // on the own origin) and NUXT_PUBLIC_SITE_ANALYTICS_WEBSITE_ID. Empty: no analytics.
+      site: { env: '', analytics: { scriptUrl: '', websiteId: '' } },
       // The embed snippet (synthwerk#38): NUXT_PUBLIC_WIDGET_SCRIPT_URL,
       // NUXT_PUBLIC_WIDGET_SCRIPT_INTEGRITY (SRI of that version, widgets#32), NUXT_PUBLIC_WIDGET_API_URL.
       widget: { scriptUrl: '', scriptIntegrity: '', apiUrl: '' }
@@ -71,7 +81,13 @@ export default defineNuxtConfig({
     '/api/ai-settings/**': { headers: { 'cache-control': 'no-store' } },
     '/api/labels/**': { headers: { 'cache-control': 'no-store' } },
     '/api/builder/**': { headers: { 'cache-control': 'no-store' } },
-    '/api/me': { headers: { 'cache-control': 'no-store' } }
+    '/api/me': { headers: { 'cache-control': 'no-store' } },
+    // The public site: same HTML for every visitor (the consent banner is client side), so a CDN
+    // may keep it for a short time. /api/site sets its own headers and an ETag (server/lib/site-api.ts).
+    '/de': { headers: { 'cache-control': SITE_HTML_CACHE } },
+    '/de/**': { headers: { 'cache-control': SITE_HTML_CACHE } },
+    '/en': { headers: { 'cache-control': SITE_HTML_CACHE } },
+    '/en/**': { headers: { 'cache-control': SITE_HTML_CACHE } }
   },
   typescript: { strict: true }
 })
