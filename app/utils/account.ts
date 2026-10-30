@@ -22,8 +22,16 @@ const messages: Record<string, string> = {
 export function deleteAccountErrorText(err: unknown): string {
   const code = (err as { data?: { data?: { code?: unknown } } } | null)?.data?.data?.code
   return typeof code === 'string' && Object.hasOwn(messages, code)
-    ? (messages[code] ?? '')
+    ? String(messages[code])
     : 'The account was not deleted. Try again later.'
+}
+
+/** The step-up for delete_account is still valid at `now` (ms). */
+export function deleteStepUpValid(
+  stepUp: { purpose: string; until: string } | undefined,
+  now: number
+): boolean {
+  return stepUp?.purpose === 'delete_account' && Date.parse(stepUp.until) > now
 }
 
 export interface DeleteAccountView {
@@ -41,11 +49,11 @@ export function deleteAccountView(
   stepUp: { purpose: string; until: string } | undefined,
   now: number
 ): DeleteAccountView {
-  const valid = stepUp?.purpose === 'delete_account' && Date.parse(stepUp.until) > now
+  const valid = deleteStepUpValid(stepUp, now)
   if (query === 'confirm' && valid) return { step: 'confirm', notice: '' }
   if (query === 'retry')
     return { step: 'start', notice: 'The new sign-in did not confirm that it was you. Try again.' }
   if (query === 'confirm')
-    return { step: 'start', notice: 'The new sign-in is older than 5 minutes. Start again.' }
+    return { step: 'start', notice: 'The new sign-in is no longer valid. Start again.' }
   return { step: 'start', notice: '' }
 }

@@ -41,7 +41,12 @@ function cancelDelete() {
 }
 
 async function onDelete() {
-  if (confirmText.value.trim() !== CONFIRM_WORD) return
+  if (deleting.value || confirmText.value.trim() !== CONFIRM_WORD) return
+  // The 5-minute step-up may have run out while the page was open.
+  if (!deleteStepUpValid(session.value?.stepUp, Date.now())) {
+    deleteError.value = deleteAccountErrorText({ data: { data: { code: 'step_up_required' } } })
+    return
+  }
   deleting.value = true
   deleteError.value = ''
   try {

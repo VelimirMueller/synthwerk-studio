@@ -286,9 +286,17 @@ describe('DELETE /api/me', () => {
     provider.options = { expiresIn: 30 }
     const b = browser()
     await stepUp(b)
-    const idToken = record(b).tokens.idToken
+    const before = record(b)
+    provider.tokenCalls.length = 0
+    harness.clock.now += 31_000
+    await sessionBody(b)
+    expect(provider.tokenCalls.map((c) => c.grant_type)).toContain('refresh_token')
+    const after = record(b)
+    expect(after.tokens.accessToken).not.toBe(before.tokens.accessToken)
+    expect(after.stepUp).toEqual(before.stepUp)
     const res = await del(b)
     expect(res.status).toBe(200)
-    expect(calls[0]?.idToken).toBe(idToken)
+    expect(calls[0]?.idToken).toBe(before.tokens.idToken)
+    expect(calls[0]?.authorization).not.toBe(`Bearer ${before.tokens.accessToken}`)
   })
 })

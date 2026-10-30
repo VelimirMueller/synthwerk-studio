@@ -12,7 +12,7 @@ describe('delete account view', () => {
 
   it('deleteAccountView - ?delete=confirm typed by hand, no step-up - start with a notice', () => {
     expect(deleteAccountView('confirm', undefined, now).step).toBe('start')
-    expect(deleteAccountView('confirm', old, now).notice).toMatch(/older than 5 minutes/)
+    expect(deleteAccountView('confirm', old, now).notice).toMatch(/no longer valid/)
   })
 
   it('deleteAccountView - step-up for another purpose - start', () => {
