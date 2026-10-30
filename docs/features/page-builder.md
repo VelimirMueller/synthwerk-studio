@@ -4,7 +4,7 @@ slug: page-builder
 status: beta
 epic: E6
 owner: studio
-paths: ["shared/sections.ts", "server/lib/builder-api.ts", "server/lib/builder-config.ts", "server/lib/builder-db.ts", "server/lib/builder-store.ts", "server/lib/org-admin.ts", "server/lib/body.ts", "server/api/builder/**", "server/utils/builder.ts", "app/pages/builder/**", "app/components/builder/**", "app/components/page/**", "app/composables/useBuilderApi.ts", "app/utils/builder.ts"]
+paths: ["shared/sections.ts", "server/lib/builder-api.ts", "server/lib/builder-config.ts", "server/lib/builder-db.ts", "server/lib/builder-store.ts", "server/lib/org-admin.ts", "server/lib/body.ts", "server/api/builder/**", "server/utils/builder.ts", "server/utils/builder-store.ts", "app/pages/builder/**", "app/components/builder/**", "app/components/page/**", "app/composables/useBuilderApi.ts", "app/utils/builder.ts"]
 api: ["GET /api/builder/pages", "POST /api/builder/pages", "GET /api/builder/pages/{pageId}", "PUT /api/builder/pages/{pageId}/draft", "POST /api/builder/pages/{pageId}/publish", "POST /api/builder/pages/{pageId}/rollback", "GET /api/builder/pages/{pageId}/versions/{version}", "GET /api/builder/pages/{pageId}/events"]
 events: []
 mcp: []
@@ -165,7 +165,7 @@ The BFF checks in this order and stops at the first refusal:
 
 ## Open points
 
-- The public site (#45) has no route to read the live version yet. `BuilderStore.getLive` is ready for it.
+- The public site reads the live version through `GET /api/site/pages/{locale}/{slug}` (synthwerk#109). See [public-site](public-site.md).
 - Lead capture with double opt-in (acceptance criterion of #46) is not in this change.
 - No bus event and no identity audit entry yet. It needs the event schemas in `synthwerk-contracts`, a relay from `builder_events` and an identity consumer.
 - No Postgres for the studio in the compose stack and the prd setup yet (`synthwerk-infra`).

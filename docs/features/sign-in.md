@@ -49,6 +49,7 @@ updated: 2026-10-30
 - The access token is refreshed when it ends within 60 s. Parallel requests share one refresh. A failed refresh ends the session.
 - CSRF, two layers:
   - Every POST, PUT, PATCH and DELETE to `/api` needs `Origin` = studio origin, or `Sec-Fetch-Site: same-origin` when there is no `Origin` (`server/middleware/csrf.ts`).
+  - `GET` and `HEAD` on `/api/site/` skip the middleware. The public site then works without the OIDC settings (synthwerk#109).
   - Routes that act on a session need the header `x-csrf-token` = the session CSRF token. A refused request does not touch the session.
 
 ## Sign-out
@@ -137,3 +138,4 @@ updated: 2026-10-30
 | 2026-10-30 | Step-up sign-in `GET /api/auth/reauth` (`prompt=login`, `max_age=0`) for the account delete; `/me` has the delete card; `/?deleted=1` notice (synthwerk#41). |
 | 2026-10-30 | `app.css` adds the `.check` style (a checkbox with its text) for the labels page (synthwerk#44). |
 | 2026-10-30 | `app.css` adds the builder editor and the page section styles (synthwerk#46). The navigation links Builder. `nuxt.config.ts` has `builder.databaseUrl` and `/api/builder/**` is `no-store`. |
+| 2026-10-30 | The CSRF middleware skips `GET` and `HEAD` on `/api/site/`, the public read route. `nuxt.config.ts` adds `site.orgId`, `public.site` and the `/de`, `/en` cache rules. `site.css` holds the public site styles (synthwerk#109). |
