@@ -134,9 +134,10 @@ The BFF checks in this order and stops at the first refusal:
 
 - `server/plugins/builder-relay.ts` starts the relay at server start (`server/lib/builder-relay.ts`, `builder-nats.ts`).
 - It applies the builder migrations, connects to NATS, and creates or updates the stream `EVT_STUDIO` (`evt.studio.>`, file storage, 30 days, duplicate window 2 min). Studio owns this stream. While the database or NATS is down, it tries again with backoff (1 s to 30 s).
-- Each run takes up to 100 rows with `relayed_at` empty, in `seq` order, `FOR UPDATE SKIP LOCKED`, in one transaction. It publishes each row (`Nats-Msg-Id` = event id, `Content-Type: application/cloudevents+json`) and sets `relayed_at`. A publish error stops the run: the rows before stay marked, the rest waits for the next run.
+- Each run takes up to 20 rows with `relayed_at` empty, in `seq` order, `FOR UPDATE SKIP LOCKED`, in one transaction. It publishes each row (`Nats-Msg-Id` = event id, `Content-Type: application/cloudevents+json`) and sets `relayed_at`. A publish error stops the run: the rows before stay marked, the rest waits for the next run.
 - Delivery is at least once. A stop between the publish and the commit sends the row again with the same id: JetStream drops it in the 2 min window, identity drops it by id after that.
-- A row that can never be a valid event (no identity org id, an id that is not a UUIDv7, a bad actor) gets `relayed_at` and `relay_error`, and an ERROR log line with the event id. Rows from before the relay (migration 2) are closed that way.
+- The publishes run inside the transaction that holds the row locks: with the 5 s publish timeout, a slow bus keeps one transaction open 100 s at most.
+- A row that can never be a valid event (no identity org id, an id that is not a UUIDv7, a bad actor) gets `relayed_at` and `relay_error`, and an ERROR log line with the event id. Rows from before the relay (migration 2) are closed that way. Such a row is never sent again by itself: to send it after a fix, set `relay_error` and `relayed_at` back to null.
 - The identity org id comes from identity (`GET /v1/me`), read in the same call that confirms the stored role (`server/lib/org-admin.ts`).
 - Logs: the error class only (`publish failed (NatsError)`, `database (28P01)`). No URL, no user, no password, no event data.
 

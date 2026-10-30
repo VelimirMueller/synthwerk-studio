@@ -69,10 +69,10 @@ export function readRelayConfig(raw: RawRelayConfig): RelayConfig | null {
   try {
     url = new URL(value)
   } catch {
-    throw new BuilderConfigError('NUXT_BUILDER_NATS_URL must be a nats:// URL')
+    throw new BuilderConfigError('NUXT_BUILDER_NATS_URL must be a nats:// or tls:// URL')
   }
   if ((url.protocol !== 'nats:' && url.protocol !== 'tls:') || url.hostname === '') {
-    throw new BuilderConfigError('NUXT_BUILDER_NATS_URL must be a nats:// URL')
+    throw new BuilderConfigError('NUXT_BUILDER_NATS_URL must be a nats:// or tls:// URL')
   }
   if (url.username !== '' || url.password !== '') {
     throw new BuilderConfigError(

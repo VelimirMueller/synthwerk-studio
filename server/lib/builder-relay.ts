@@ -112,7 +112,10 @@ export interface RelayOptions {
   /** eventSource(env). */
   source: string
   log?: (level: 'info' | 'warn' | 'error', message: string) => void
-  /** Max rows per transaction. Default 100. */
+  /**
+   * Max rows per transaction. Default 20. The publishes run inside the transaction that holds the
+   * row locks: with the 5 s publish timeout a slow bus keeps it open 100 s at most.
+   */
   batchSize?: number
 }
 
@@ -120,7 +123,7 @@ export class BuilderRelay {
   private readonly batchSize: number
 
   constructor(private readonly opts: RelayOptions) {
-    this.batchSize = opts.batchSize ?? 100
+    this.batchSize = opts.batchSize ?? 20
   }
 
   /**
