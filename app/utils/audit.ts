@@ -2,18 +2,43 @@
 // the generic line (type, actor). Plain text only: the page renders it with interpolation.
 
 export interface AuditLine {
-  /** The event type without `dev.synthwerk.identity.` and without the version. */
+  /** The event type without `dev.synthwerk.identity.` (llm: `llm.`) and without the version. */
   kind: string
   text: string
 }
 
 const PREFIX = 'dev.synthwerk.identity.'
+const LLM_PREFIX = 'dev.synthwerk.'
 
-/** `dev.synthwerk.identity.member.invited.v1` -> `member.invited`. Other prefixes stay. */
+/**
+ * `dev.synthwerk.identity.member.invited.v1` -> `member.invited`,
+ * `dev.synthwerk.llm.ai_settings.changed.v1` -> `llm.ai_settings.changed`. Other prefixes stay.
+ */
 export function shortType(type: string): string {
-  const name = type.startsWith(PREFIX) ? type.slice(PREFIX.length) : type
+  let name = type
+  if (type.startsWith(PREFIX)) name = type.slice(PREFIX.length)
+  else if (type.startsWith(`${LLM_PREFIX}llm.`)) name = type.slice(LLM_PREFIX.length)
   return name.replace(/\.v[0-9]+$/, '')
 }
+
+/** The setting names of `llm.ai_settings.changed` the line shows. Other names are dropped. */
+const AI_SETTINGS = [
+  'model',
+  'allowed_models',
+  'system_prompt',
+  'max_input_chars',
+  'user_tokens_per_day',
+  'temperature'
+]
+
+/** "max_input_chars, system_prompt": the known names of `data.changed`, each once. */
+const changedSettings = (value: unknown): string =>
+  Array.isArray(value)
+    ? [...new Set(value.filter((n): n is string => AI_SETTINGS.includes(n)))].join(', ')
+    : ''
+
+const versionText = (value: unknown): string =>
+  typeof value === 'number' && Number.isSafeInteger(value) ? String(value) : '?'
 
 /** `user:123` -> `user 123`, `service:llm` -> `service llm`, `system` -> `system`. */
 export function actorLabel(actor: string): string {
@@ -66,6 +91,13 @@ export function describeAuditEvent(event: {
         kind,
         text: `${who} changed the plan to ${text(d.plan)} (${text(d.reason, 'no reason')})`
       }
+    case 'llm.ai_settings.changed': {
+      const names = changedSettings(d.changed)
+      return {
+        kind,
+        text: `${who} changed the AI settings${names ? `: ${names}` : ''} (version ${versionText(d.version)})`
+      }
+    }
     default:
       return { kind, text: `${kind} by ${who}` }
   }

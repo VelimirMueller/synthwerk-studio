@@ -35,6 +35,9 @@ export default defineNuxtConfig({
     // Identity base URL as the studio server reaches it: NUXT_IDENTITY_URL. Apps (synthwerk#38),
     // users and audit (/api/org, synthwerk#37). Server side only.
     identity: { url: '' },
+    // llm base URL as the studio server reaches it: NUXT_LLM_URL. AI settings (synthwerk#39).
+    // Server side only.
+    llm: { url: '' },
     public: {
       // The embed snippet (synthwerk#38): NUXT_PUBLIC_WIDGET_SCRIPT_URL, NUXT_PUBLIC_WIDGET_API_URL.
       widget: { scriptUrl: '', apiUrl: '' }
@@ -57,7 +60,8 @@ export default defineNuxtConfig({
     '/api/auth/**': { headers: { 'cache-control': 'no-store' } },
     '/api/health/**': { headers: { 'cache-control': 'no-store' } },
     '/api/apps/**': { headers: { 'cache-control': 'no-store' } },
-    '/api/org/**': { headers: { 'cache-control': 'no-store' } }
+    '/api/org/**': { headers: { 'cache-control': 'no-store' } },
+    '/api/ai-settings/**': { headers: { 'cache-control': 'no-store' } }
   },
   typescript: { strict: true }
 })

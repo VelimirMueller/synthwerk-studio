@@ -97,7 +97,7 @@ updated: 2026-10-30
 | Store bounds | Only signed-in sessions are stored. Each write has `ttl` = remaining life + 10 min (for drivers that expire entries, such as Redis). The grace gives the sweep time to revoke first. |
 | Sweep | After each new session, at most once per 60 s: every session past its end gets its refresh token revoked, then is removed. A read of an expired session does the same. |
 | Refresh leeway | 60 s |
-| Response headers | `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`. `/api/auth/**` and `/api/apps/**` have `Cache-Control: no-store`. |
+| Response headers | `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`. `/api/auth/**`, `/api/apps/**` and `/api/ai-settings/**` have `Cache-Control: no-store`. |
 
 ## Events
 
@@ -131,3 +131,4 @@ updated: 2026-10-30
 | 2026-10-30 | `paths` lists the sign-in files only, so other features keep their own doc. The home page links `/health` for operators, owners and admins (synthwerk#40). |
 | 2026-10-30 | `/me` links to Apps; shared form styles; `/api/apps/**` is `no-store` (synthwerk#38). |
 | 2026-10-30 | `/me` shows the studio navigation (Me, Apps, Users, Audit). `app.css` adds the nav, table and select styles of the users and audit pages (synthwerk#37). |
+| 2026-10-30 | `app.css` adds the checkbox group of the AI settings page. `/api/ai-settings/**` is `no-store` (synthwerk#39). |

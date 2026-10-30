@@ -11,10 +11,33 @@ const ev = (type: string, data: Record<string, unknown>, actor = 'user:u1', subj
 describe('audit lines', () => {
   it('shortType - strips the identity prefix and the version only', () => {
     expect(shortType('dev.synthwerk.identity.member.invited.v1')).toBe('member.invited')
-    expect(shortType('dev.synthwerk.llm.usage.recorded.v2')).toBe(
-      'dev.synthwerk.llm.usage.recorded'
+    expect(shortType('dev.synthwerk.llm.usage.recorded.v2')).toBe('llm.usage.recorded')
+    expect(shortType('dev.synthwerk.pulse.check.failed.v1')).toBe(
+      'dev.synthwerk.pulse.check.failed'
     )
   })
+
+  it.each([
+    [
+      { version: 3, changed: ['max_input_chars', 'system_prompt'] },
+      'user u1 changed the AI settings: max_input_chars, system_prompt (version 3)'
+    ],
+    [
+      { version: 4, changed: ['temperature', '<b>x</b>', 7, 'temperature'] },
+      'user u1 changed the AI settings: temperature (version 4)'
+    ],
+    [{ changed: 'model' }, 'user u1 changed the AI settings (version ?)']
+  ])(
+    'llm.ai_settings.changed %# - known setting names and the version, plain text',
+    (data, text) => {
+      const line = describeAuditEvent({
+        type: 'dev.synthwerk.llm.ai_settings.changed.v1',
+        actor: 'user:u1',
+        data
+      })
+      expect(line).toEqual({ kind: 'llm.ai_settings.changed', text })
+    }
+  )
 
   it('actorLabel - user, service and system', () => {
     expect(actorLabel('user:123')).toBe('user 123')

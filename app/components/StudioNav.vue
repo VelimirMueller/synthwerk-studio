@@ -4,7 +4,8 @@ const links = [
   { to: '/me', label: 'Me' },
   { to: '/apps', label: 'Apps' },
   { to: '/users', label: 'Users' },
-  { to: '/audit', label: 'Audit' }
+  { to: '/audit', label: 'Audit' },
+  { to: '/ai', label: 'AI' }
 ]
 </script>
 
