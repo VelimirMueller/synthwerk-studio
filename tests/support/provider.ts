@@ -15,6 +15,8 @@ export interface IssuedCode {
   nonce: string
   challenge: string
   redirectUri: string
+  prompt: string
+  maxAge: string
 }
 
 export interface ProviderOptions {
@@ -24,6 +26,8 @@ export interface ProviderOptions {
   expiresIn?: number
   /** Return this status and OAuth error on the next refresh. */
   refreshError?: string
+  /** ID token auth_time (Unix seconds). Default: the time of the token call. null: none. */
+  authTime?: number | null
 }
 
 export class MockProvider {
@@ -80,7 +84,9 @@ export class MockProvider {
       sub,
       nonce: url.searchParams.get('nonce') ?? '',
       challenge: url.searchParams.get('code_challenge') ?? '',
-      redirectUri: url.searchParams.get('redirect_uri') ?? ''
+      redirectUri: url.searchParams.get('redirect_uri') ?? '',
+      prompt: url.searchParams.get('prompt') ?? '',
+      maxAge: url.searchParams.get('max_age') ?? ''
     })
     return { code, state: url.searchParams.get('state') ?? '' }
   }
@@ -111,6 +117,12 @@ export class MockProvider {
     }
   }
 
+  private authTimeClaim(): { auth_time?: number } {
+    const at = this.options.authTime
+    if (at === null) return {}
+    return { auth_time: at ?? Math.floor(Date.now() / 1000) }
+  }
+
   private async tokens(sub: string, nonce?: string) {
     const refresh = randomBytes(16).toString('hex')
     this.refreshTokens.set(refresh, sub)
@@ -121,6 +133,7 @@ export class MockProvider {
         sub,
         aud: CLIENT_ID,
         ...(nonce ? { nonce } : {}),
+        ...this.authTimeClaim(),
         amr: ['user', 'mfa']
       }),
       refresh_token: refresh,

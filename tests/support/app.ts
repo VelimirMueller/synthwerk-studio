@@ -79,6 +79,10 @@ export function buildApp(
       eventHandler((e) => service.login(e))
     )
     .get(
+      '/api/auth/reauth',
+      eventHandler((e) => service.reauth(e))
+    )
+    .get(
       '/api/auth/callback',
       eventHandler((e) => service.callback(e))
     )

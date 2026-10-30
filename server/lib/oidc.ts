@@ -83,10 +83,23 @@ export class OidcClient {
     return this.jwks.set
   }
 
-  async authorizeUrl(input: { state: string; nonce: string; verifier: string; scope: string }) {
+  /**
+   * The authorize URL of the code flow. `prompt` and `maxAge` force a fresh sign-in (step-up):
+   * with `max_age` the ID token must carry `auth_time` (OIDC Core 3.1.2.1).
+   */
+  async authorizeUrl(input: {
+    state: string
+    nonce: string
+    verifier: string
+    scope: string
+    prompt?: 'login'
+    maxAge?: number
+  }) {
     const { authorization_endpoint } = await this.discover()
     const url = new URL(authorization_endpoint)
     url.search = new URLSearchParams({
+      ...(input.prompt ? { prompt: input.prompt } : {}),
+      ...(input.maxAge !== undefined ? { max_age: String(input.maxAge) } : {}),
       client_id: this.config.clientId,
       redirect_uri: this.config.redirectUri,
       response_type: 'code',

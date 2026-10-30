@@ -5,7 +5,7 @@ status: beta
 epic: E2
 owner: studio
 paths: ["server/api/auth/**", "server/lib/auth.ts", "server/lib/claims.ts", "server/lib/config.ts", "server/lib/oidc.ts", "server/lib/seal.ts", "server/lib/session.ts", "server/utils/auth.ts", "server/middleware/**", "app/middleware/**", "app/composables/useAuthSession.ts", "app/pages/index.vue", "app/pages/me.vue", "app/assets/app.css"]
-api: ["GET /api/auth/login", "GET /api/auth/callback", "GET /api/auth/session", "POST /api/auth/logout"]
+api: ["GET /api/auth/login", "GET /api/auth/reauth", "GET /api/auth/callback", "GET /api/auth/session", "POST /api/auth/logout"]
 events: []
 mcp: []
 updated: 2026-10-30
@@ -28,6 +28,7 @@ updated: 2026-10-30
 4. The BFF stores the tokens and the identity in the session store, sets the session cookie and redirects to `returnTo`.
 5. `GET /api/auth/session` gives the page the user, org, roles, `amr` and the CSRF token. No token.
 6. `POST /api/auth/logout` calls Zitadel `end_session` from the server, revokes the refresh token and deletes the session.
+7. `GET /api/auth/reauth?purpose=delete_account` starts a step-up sign-in: the same flow with `prompt=login` and `max_age=0`. See [account-delete.md](account-delete.md).
 
 | Check | Rule |
 |---|---|
@@ -36,6 +37,7 @@ updated: 2026-10-30
 | Subject | ID token, access token and userinfo name the same `sub` |
 | `returnTo` | Same-origin path only. `//host`, `/\host`, URLs and control characters give `/me`. |
 | Login transaction | Sealed cookie `__Host-sw_login` (`HttpOnly; Secure; SameSite=Lax; Path=/`, no `Domain`, 10 minutes): no sibling subdomain can set it. AES-256-GCM; purpose `login-tx` in the HKDF-SHA256 key and in the AAD, so no other seal opens as a login. Tampered, foreign, other purpose or older = `login_expired`. The callback clears it. A replayed code fails at Zitadel. |
+| Step-up | The login cookie also holds the purpose and the `sub` of the session that started it. The callback marks the new session for that purpose for 5 minutes only when the ID token names the same `sub` and has an `auth_time` from within this login (30 s skew). Else it goes to `/me?delete=retry` without a mark. |
 | Session | Absolute end after `NUXT_SESSION_MAX_AGE_SECONDS` (8 h). Refresh does not extend it. |
 
 ## Session and CSRF
@@ -132,4 +134,5 @@ updated: 2026-10-30
 | 2026-10-30 | `/me` links to Apps; shared form styles; `/api/apps/**` is `no-store` (synthwerk#38). |
 | 2026-10-30 | `/me` shows the studio navigation (Me, Apps, Users, Audit). `app.css` adds the nav, table and select styles of the users and audit pages (synthwerk#37). |
 | 2026-10-30 | `app.css` adds the checkbox group of the AI settings page. `/api/ai-settings/**` is `no-store` (synthwerk#39). |
+| 2026-10-30 | Step-up sign-in `GET /api/auth/reauth` (`prompt=login`, `max_age=0`) for the account delete; `/me` has the delete card; `/?deleted=1` notice (synthwerk#41). |
 | 2026-10-30 | `app.css` adds the `.check` style (a checkbox with its text) for the labels page (synthwerk#44). |
