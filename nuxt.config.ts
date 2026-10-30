@@ -38,6 +38,9 @@ export default defineNuxtConfig({
     // llm base URL as the studio server reaches it: NUXT_LLM_URL. AI settings (synthwerk#39).
     // Server side only.
     llm: { url: '' },
+    // Vision as the studio server reaches it (NUXT_VISION_URL) and the service token of its
+    // admin routes (NUXT_VISION_ADMIN_TOKEN, env only). Label admin, synthwerk#44. Server side only.
+    vision: { url: '', adminToken: '' },
     public: {
       // The embed snippet (synthwerk#38): NUXT_PUBLIC_WIDGET_SCRIPT_URL, NUXT_PUBLIC_WIDGET_API_URL.
       widget: { scriptUrl: '', apiUrl: '' }
@@ -61,7 +64,8 @@ export default defineNuxtConfig({
     '/api/health/**': { headers: { 'cache-control': 'no-store' } },
     '/api/apps/**': { headers: { 'cache-control': 'no-store' } },
     '/api/org/**': { headers: { 'cache-control': 'no-store' } },
-    '/api/ai-settings/**': { headers: { 'cache-control': 'no-store' } }
+    '/api/ai-settings/**': { headers: { 'cache-control': 'no-store' } },
+    '/api/labels/**': { headers: { 'cache-control': 'no-store' } }
   },
   typescript: { strict: true }
 })
