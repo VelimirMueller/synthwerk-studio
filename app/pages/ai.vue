@@ -79,9 +79,21 @@ async function save() {
   message.value = ''
   failure.value = ''
   conflict.value = false
+  const b = settings.value.bounds
+  const maxInputChars = whole(form.maxInputChars)
+  const userTokensPerDay = whole(form.userTokensPerDay)
   const temperature = form.temperature.trim() === '' ? null : Number(form.temperature.trim())
-  if (temperature !== null && !Number.isFinite(temperature)) {
-    failure.value = 'Temperature: a number, or empty for the model default.'
+  // The BFF and llm check again. These checks only give a clear text early.
+  if (!(maxInputChars >= 1 && maxInputChars <= b.maxInputChars)) {
+    failure.value = `Max characters of one message: a whole number from 1 to ${b.maxInputChars}.`
+    return
+  }
+  if (!(userTokensPerDay >= 0)) {
+    failure.value = 'Tokens per user per day: a whole number, 0 or more.'
+    return
+  }
+  if (temperature !== null && !(temperature >= 0 && temperature <= b.temperatureMax)) {
+    failure.value = `Temperature: a number from 0 to ${b.temperatureMax}, or empty for the model default.`
     return
   }
   saving.value = true
@@ -89,10 +101,10 @@ async function save() {
     settings.value = await saveSettings({
       version: settings.value.version,
       model: form.model,
-      allowedModels: settings.value.bounds.models.filter((m) => form.allowedModels.includes(m)),
+      allowedModels: b.models.filter((m) => form.allowedModels.includes(m)),
       systemPrompt: form.systemPrompt,
-      maxInputChars: whole(form.maxInputChars),
-      userTokensPerDay: whole(form.userTokensPerDay),
+      maxInputChars,
+      userTokensPerDay,
       temperature
     })
     message.value = 'AI settings saved.'
