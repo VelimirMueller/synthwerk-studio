@@ -86,7 +86,7 @@ The BFF checks in this order and stops at the first refusal:
 ## Unpublish, delete, copy into draft (synthwerk#108)
 
 - **Unpublish** clears the live version. Every version stays. The public site answers 404 for the page (within the 60 s cache of `/api/site`). Publish or roll back brings it back. A page that is not live gives 409 `not_live`.
-- **Delete** removes the page with its draft and versions. Owners only (token role `owner` and the stored owner or admin membership): an admin gets 403 `owner_required`. The editor asks for the slug, and the server checks it (409 `confirm_mismatch`). The page events stay in `builder_events`: the audit trail outlives the page. Confirmed leads of the page stay with slug, locale and version; pending leads of the page are deleted.
+- **Delete** removes the page with its draft and versions. Owners only: the token role `owner` and the stored role `owner` in identity (`confirmOrgRole`, `server/lib/org-admin.ts`). A stale owner claim after a demotion gets 403 `owner_required`. The editor asks for the slug, and the server checks it (409 `confirm_mismatch`). The page events stay in `builder_events`: the audit trail outlives the page. Confirmed leads of the page stay with slug, locale and version; pending leads of the page are deleted.
 - **Copy into draft** puts the content of a published version into the draft. It needs the draft `revision`, like a save (409 `draft_conflict`). The editor asks first when the draft has unsaved changes.
 
 ## Section catalogue
@@ -207,8 +207,8 @@ The BFF checks in this order and stops at the first refusal:
 
 - The public site reads the live version through `GET /api/site/pages/{locale}/{slug}` (synthwerk#109). See [public-site](public-site.md).
 - No Postgres for the studio in the compose stack and the prd setup yet (`synthwerk-infra`).
-- The three new event types need schemas in `synthwerk-contracts` before a relay sends them (synthwerk#106).
-- Delete checks the owner role in the token; identity confirms owner or admin. A demoted owner keeps delete until the token expires (5 minutes).
+- The relay sends unpublished, deleted and version_copied like the other types. Their schemas: synthwerk-contracts#35. Identity does not read them yet.
+- Delete reads the stored role of the caller from the identity members pages (up to 10 pages of 100). A larger org gets 403.
 - No Playwright e2e in this change. Add it with the local stack (synthwerk-e2e).
 
 ## Changes
