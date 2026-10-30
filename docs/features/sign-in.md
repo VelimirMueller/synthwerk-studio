@@ -130,3 +130,4 @@ updated: 2026-10-30
 | 2026-10-29 | First version (synthwerk#95). |
 | 2026-10-30 | `paths` lists the sign-in files only, so other features keep their own doc. The home page links `/health` for operators, owners and admins (synthwerk#40). |
 | 2026-10-30 | `/me` links to Apps; shared form styles; `/api/apps/**` is `no-store` (synthwerk#38). |
+| 2026-10-30 | `/me` shows the studio navigation (Me, Users, Audit). `app.css` adds the nav, table and select styles of the users and audit pages (synthwerk#37). |

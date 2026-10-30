@@ -18,6 +18,7 @@ async function onSignOut() {
 
 <template>
   <main v-if="session" class="page">
+    <StudioNav />
     <h1>{{ session.org.name || 'Your org' }}</h1>
     <nav aria-label="Studio"><NuxtLink to="/apps">Apps</NuxtLink></nav>
     <SwCard eyebrow="Signed in as" :title="session.user.name || session.user.username">

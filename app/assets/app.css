@@ -110,4 +110,109 @@ body {
 
 .over {
   color: var(--danger);
+/* Studio navigation (StudioNav.vue). The current page carries the one indigo accent. */
+.studio-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.studio-nav__link {
+  color: var(--fg-muted);
+  text-decoration: none;
+  padding: 0.5rem 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.studio-nav__link:hover {
+  color: var(--fg);
+}
+
+.studio-nav__link[aria-current="page"] {
+  color: var(--accent-2-text);
+  border-bottom-color: var(--accent-2);
+}
+
+.studio-nav__link:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
+}
+
+/* Users and audit pages. */
+.mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.select:disabled {
+  background: var(--surface-2);
+  color: var(--fg-muted);
+}
+
+.invite {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) max-content max-content;
+  align-items: end;
+  gap: 0.75rem;
+}
+
+@media (max-width: 40rem) {
+  .invite {
+    grid-template-columns: 1fr;
+  }
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  text-align: left;
+  padding: 0.625rem 0.5rem;
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+
+.table th {
+  color: var(--fg-muted);
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.audit {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.audit__item {
+  display: grid;
+  gap: 0.125rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-subtle);
 }
