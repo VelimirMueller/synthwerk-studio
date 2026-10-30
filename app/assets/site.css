@@ -170,3 +170,24 @@
     transition: opacity var(--duration-base) var(--motion-ease-standard);
   }
 }
+
+/* Lead form (synthwerk#105). The honeypot field is off screen: people never see or reach it. */
+.lead-form__trap {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.lead-form__consent {
+  align-items: flex-start;
+}
+
+.lead-form__consent .rich__p {
+  margin: 0;
+}
+
+.lead-form__done {
+  margin: 0;
+}

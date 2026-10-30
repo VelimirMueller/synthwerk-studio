@@ -218,7 +218,11 @@ describe('matches', () => {
 
 describe('readSiteConfig', () => {
   it('needs an org id that matches the org pattern and never echoes it', () => {
-    expect(readSiteConfig({ site: { orgId: ' org_1 ' } })).toEqual({ orgId: 'org_1' })
+    expect(readSiteConfig({ site: { orgId: ' org_1 ' } })).toEqual({
+      orgId: 'org_1',
+      origin: null,
+      trustForwardedFor: false
+    })
     expect(() => readSiteConfig({})).toThrow('set NUXT_SITE_ORG_ID')
     expect(() => readSiteConfig({ site: { orgId: 42 } })).toThrow(SiteConfigError)
     expect(() => readSiteConfig({ site: { orgId: 'bad org/../x' } })).toThrow(
@@ -229,5 +233,33 @@ describe('readSiteConfig', () => {
     } catch (err) {
       expect((err as Error).message).not.toContain('bad org')
     }
+  })
+})
+
+describe('readSiteConfig - lead form settings (synthwerk#105)', () => {
+  it('takes an https origin, or http for localhost, in canonical form', () => {
+    const read = (origin: unknown, trustForwardedFor?: unknown) =>
+      readSiteConfig({ site: { orgId: 'o', origin, trustForwardedFor } })
+    expect(read('https://Synthwerk.dev').origin).toBe('https://synthwerk.dev')
+    expect(read('https://synthwerk.dev:8443').origin).toBe('https://synthwerk.dev:8443')
+    expect(read('http://localhost:3000').origin).toBe('http://localhost:3000')
+    expect(read(' ').origin).toBeNull()
+    expect(read('https://x.dev', 'true').trustForwardedFor).toBe(true)
+    expect(read('https://x.dev', true).trustForwardedFor).toBe(true)
+    expect(read('https://x.dev', 'yes').trustForwardedFor).toBe(false)
+  })
+
+  it.each([
+    'http://synthwerk.dev',
+    'https://synthwerk.dev/',
+    'https://synthwerk.dev/path',
+    'https://synthwerk.dev?x=1',
+    'https://user:pw@synthwerk.dev',
+    'ftp://synthwerk.dev',
+    'not a url'
+  ])('refuses %s and names the variable only', (origin) => {
+    expect(() => readSiteConfig({ site: { orgId: 'o', origin } })).toThrow(
+      /^NUXT_SITE_ORIGIN must be an origin/
+    )
   })
 })

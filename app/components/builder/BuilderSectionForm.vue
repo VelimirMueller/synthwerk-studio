@@ -262,5 +262,49 @@ function remove<T>(list: T[], index: number) {
       </div>
       <BuilderLinkField v-model="section.cta" legend="Button" :id-prefix="`${id}-cta`" />
     </template>
+
+    <template v-else-if="section.type === 'lead'">
+      <p class="muted hint">
+        Fixed fields: email, an optional name and a consent checkbox. The visitor confirms the
+        address by mail; only then the lead shows under Leads.
+      </p>
+      <div class="field">
+        <label :for="`${id}-title`">Title</label>
+        <SwInput :id="`${id}-title`" v-model="section.title" :maxlength="LIMITS.short" />
+      </div>
+      <div class="field">
+        <label :for="`${id}-body`">Text (optional)</label>
+        <textarea
+          :id="`${id}-body`"
+          v-model="section.body"
+          class="textarea"
+          rows="3"
+          :maxlength="LIMITS.long"
+        />
+        <span class="muted hint">{{ MARKDOWN_HINT }}</span>
+      </div>
+      <label class="check">
+        <input v-model="section.nameField" type="checkbox">
+        Ask for a name too (optional field; leave off when the email is enough)
+      </label>
+      <div class="field">
+        <label :for="`${id}-consent`">Consent text</label>
+        <textarea
+          :id="`${id}-consent`"
+          v-model="section.consent"
+          class="textarea"
+          rows="3"
+          :maxlength="LIMITS.long"
+        />
+        <span class="muted hint">
+          Shows next to the checkbox. Say what you store and why, and link the privacy page. Each
+          lead keeps the text the visitor agreed to.
+        </span>
+      </div>
+      <div class="field">
+        <label :for="`${id}-button`">Button label</label>
+        <SwInput :id="`${id}-button`" v-model="section.button" :maxlength="LIMITS.label" />
+      </div>
+    </template>
   </div>
 </template>
