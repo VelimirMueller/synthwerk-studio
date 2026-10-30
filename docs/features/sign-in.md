@@ -4,7 +4,7 @@ slug: sign-in
 status: beta
 epic: E2
 owner: studio
-paths: ["server/api/auth/**", "server/lib/auth.ts", "server/lib/claims.ts", "server/lib/config.ts", "server/lib/oidc.ts", "server/lib/seal.ts", "server/lib/session.ts", "server/utils/auth.ts", "server/middleware/**", "app/middleware/**", "app/composables/useAuthSession.ts", "app/pages/index.vue", "app/pages/me.vue"]
+paths: ["server/api/auth/**", "server/lib/auth.ts", "server/lib/claims.ts", "server/lib/config.ts", "server/lib/oidc.ts", "server/lib/seal.ts", "server/lib/session.ts", "server/utils/auth.ts", "server/middleware/**", "app/middleware/**", "app/composables/useAuthSession.ts", "app/pages/index.vue", "app/pages/me.vue", "app/assets/app.css"]
 api: ["GET /api/auth/login", "GET /api/auth/callback", "GET /api/auth/session", "POST /api/auth/logout"]
 events: []
 mcp: []
@@ -83,6 +83,7 @@ updated: 2026-10-30
 
 - `/` has the sign-in button and shows the sign-in errors as text.
 - `/me` uses route middleware `auth`. Without a session it starts the sign-in with `returnTo` = the page.
+- `/me` links to **Apps** ([apps-and-embed.md](apps-and-embed.md)). `app/assets/app.css` also holds the shared form styles (`.form`, `.field`, `.textarea`, `.select`).
 - Components: `SwButton`, `SwCard`, `SwPill` from `@synthwerk/ui-vue`, styles from `@synthwerk/tokens`. No `v-html`.
 - The packages are not on npm yet. `vendor/` holds the tarballs packed from synthwerk-sdk `f0bc0cc` (`pnpm -r pack`).
 
@@ -96,7 +97,7 @@ updated: 2026-10-30
 | Store bounds | Only signed-in sessions are stored. Each write has `ttl` = remaining life + 10 min (for drivers that expire entries, such as Redis). The grace gives the sweep time to revoke first. |
 | Sweep | After each new session, at most once per 60 s: every session past its end gets its refresh token revoked, then is removed. A read of an expired session does the same. |
 | Refresh leeway | 60 s |
-| Response headers | `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`. `/api/auth/**` has `Cache-Control: no-store`. |
+| Response headers | `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`. `/api/auth/**` and `/api/apps/**` have `Cache-Control: no-store`. |
 
 ## Events
 
@@ -126,4 +127,6 @@ updated: 2026-10-30
 
 | Date | Change |
 |---|---|
+| 2026-10-29 | First version (synthwerk#95). |
 | 2026-10-30 | `paths` lists the sign-in files only, so other features keep their own doc. The home page links `/health` for operators, owners and admins (synthwerk#40). |
+| 2026-10-30 | `/me` links to Apps; shared form styles; `/api/apps/**` is `no-store` (synthwerk#38). |

@@ -31,6 +31,12 @@ export default defineNuxtConfig({
     // The browser never calls it: server/api/health is the BFF (synthwerk#40).
     pulse: {
       baseUrl: ''
+    },
+    // Identity base URL as the studio server reaches it: NUXT_IDENTITY_URL (synthwerk#38).
+    identity: { url: '' },
+    public: {
+      // The embed snippet (synthwerk#38): NUXT_PUBLIC_WIDGET_SCRIPT_URL, NUXT_PUBLIC_WIDGET_API_URL.
+      widget: { scriptUrl: '', apiUrl: '' }
     }
   },
   nitro: {
@@ -48,7 +54,8 @@ export default defineNuxtConfig({
       }
     },
     '/api/auth/**': { headers: { 'cache-control': 'no-store' } },
-    '/api/health/**': { headers: { 'cache-control': 'no-store' } }
+    '/api/health/**': { headers: { 'cache-control': 'no-store' } },
+    '/api/apps/**': { headers: { 'cache-control': 'no-store' } }
   },
   typescript: { strict: true }
 })

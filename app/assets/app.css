@@ -51,3 +51,63 @@ body {
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+
+/* Forms and the apps pages (synthwerk#38). */
+.form {
+  display: grid;
+  gap: 1rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.375rem;
+}
+
+.textarea,
+.select {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-md);
+  background: var(--input-bg);
+  color: var(--fg);
+  font: inherit;
+}
+
+.textarea {
+  resize: vertical;
+  font-family: var(--font-mono);
+}
+
+.textarea:focus-visible,
+.select:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
+}
+
+.hint {
+  font-size: 0.875rem;
+}
+
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.settings {
+  display: grid;
+  gap: 1.5rem;
+}
+
+@media (min-width: 48rem) {
+  .settings {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
+
+.over {
+  color: var(--danger);
+}
