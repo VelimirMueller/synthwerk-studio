@@ -132,3 +132,4 @@ updated: 2026-10-30
 | 2026-10-30 | `/me` links to Apps; shared form styles; `/api/apps/**` is `no-store` (synthwerk#38). |
 | 2026-10-30 | `/me` shows the studio navigation (Me, Apps, Users, Audit). `app.css` adds the nav, table and select styles of the users and audit pages (synthwerk#37). |
 | 2026-10-30 | `app.css` adds the checkbox group of the AI settings page. `/api/ai-settings/**` is `no-store` (synthwerk#39). |
+| 2026-10-30 | `app.css` adds the `.check` style (a checkbox with its text) for the labels page (synthwerk#44). |

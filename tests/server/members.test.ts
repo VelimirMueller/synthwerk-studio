@@ -92,6 +92,11 @@ describe('MembersClient - calls', () => {
     expect(identity.work[0]?.search).toBe('')
   })
 
+  it('listMembers - limit and cursor - both in the query', async () => {
+    await client.listMembers('MTI', 1)
+    expect(identity.work[0]?.search).toBe('?cursor=MTI&limit=1')
+  })
+
   it('invite - POST members with email and role as JSON - the pending invitation', async () => {
     const inv = await client.invite(' ada@example.com ', 'admin')
     expect(inv).toEqual({
@@ -217,6 +222,8 @@ describe('MembersClient - input checks (no identity call)', () => {
     ['long email', () => client.invite(`${'a'.repeat(250)}@x.de`, 'member')],
     ['email not a string', () => client.invite({ email: 'a@b.c' }, 'member')],
     ['long cursor', () => client.listMembers('c'.repeat(257))],
+    ['limit 0', () => client.listMembers(undefined, 0)],
+    ['limit over 100', () => client.listMembers(undefined, 101)],
     ['invitation id not a uuid', () => client.revokeInvitation('../members/user-2')],
     ['invitation id missing', () => client.revokeInvitation(undefined)],
     ['cursor not a string', () => client.listAuditEvents(['a', 'b'])]

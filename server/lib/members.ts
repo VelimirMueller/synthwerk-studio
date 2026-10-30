@@ -149,10 +149,14 @@ export class MembersClient {
     return this.orgId
   }
 
-  async listMembers(cursor?: unknown): Promise<MemberPage> {
+  /** `limit` (1 to 100) asks identity for a smaller page; absent = identity default. */
+  async listMembers(cursor?: unknown, limit?: number): Promise<MemberPage> {
     const next = checkCursor(cursor)
+    if (limit !== undefined && (!Number.isInteger(limit) || limit < 1 || limit > 100)) {
+      throw invalid('limit must be 1 to 100')
+    }
     const org = await this.org()
-    const page = await this.call('GET', `${orgPath(org)}/members${query(next)}`)
+    const page = await this.call('GET', `${orgPath(org)}/members${query(next, limit)}`)
     return readPage(page, readMember)
   }
 
@@ -235,7 +239,13 @@ export class MembersClient {
 
 const orgPath = (orgId: string) => `/v1/orgs/${encodeURIComponent(orgId)}`
 
-const query = (cursor?: string) => (cursor ? `?cursor=${encodeURIComponent(cursor)}` : '')
+function query(cursor?: string, limit?: number): string {
+  const params = new URLSearchParams()
+  if (cursor) params.set('cursor', cursor)
+  if (limit !== undefined) params.set('limit', String(limit))
+  const text = params.toString()
+  return text ? `?${text}` : ''
+}
 
 /**
  * Maps an identity error answer to a MembersError. Only the status and a well-formed `code`

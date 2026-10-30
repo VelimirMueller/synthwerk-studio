@@ -5,7 +5,8 @@ const links = [
   { to: '/apps', label: 'Apps' },
   { to: '/users', label: 'Users' },
   { to: '/audit', label: 'Audit' },
-  { to: '/ai', label: 'AI' }
+  { to: '/ai', label: 'AI' },
+  { to: '/labels', label: 'Labels' }
 ]
 </script>
 
