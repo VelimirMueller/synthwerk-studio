@@ -110,6 +110,8 @@ body {
 
 .over {
   color: var(--danger);
+}
+
 /* Studio navigation (StudioNav.vue). The current page carries the one indigo accent. */
 .studio-nav {
   display: flex;

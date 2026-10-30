@@ -30,9 +30,7 @@ export function readIdentityConfig(raw: RawIdentityConfig): IdentityConfig {
     throw new IdentityConfigError('NUXT_IDENTITY_URL must be an absolute http(s) URL')
   }
   if (url.username || url.password || url.search || url.hash) {
-    throw new IdentityConfigError(
-      'NUXT_IDENTITY_URL must have no user info, query or fragment'
-    )
+    throw new IdentityConfigError('NUXT_IDENTITY_URL must have no user info, query or fragment')
   }
   return { baseUrl: url.toString().replace(/\/+$/, '') }
 }
