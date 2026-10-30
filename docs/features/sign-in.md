@@ -50,6 +50,7 @@ updated: 2026-10-30
 - CSRF, two layers:
   - Every POST, PUT, PATCH and DELETE to `/api` needs `Origin` = studio origin, or `Sec-Fetch-Site: same-origin` when there is no `Origin` (`server/middleware/csrf.ts`).
   - `GET` and `HEAD` on `/api/site/` skip the middleware. The public site then works without the OIDC settings (synthwerk#109).
+  - `POST /api/site/leads` and `POST /api/site/leads/confirm` skip it too. They have no session; they check `Origin` against `NUXT_SITE_ORIGIN` themselves (synthwerk#105, [leads](leads.md)).
   - Routes that act on a session need the header `x-csrf-token` = the session CSRF token. A refused request does not touch the session.
 
 ## Sign-out
@@ -139,3 +140,4 @@ updated: 2026-10-30
 | 2026-10-30 | `app.css` adds the `.check` style (a checkbox with its text) for the labels page (synthwerk#44). |
 | 2026-10-30 | `app.css` adds the builder editor and the page section styles (synthwerk#46). The navigation links Builder. `nuxt.config.ts` has `builder.databaseUrl` and `/api/builder/**` is `no-store`. |
 | 2026-10-30 | The CSRF middleware skips `GET` and `HEAD` on `/api/site/`, the public read route. `nuxt.config.ts` adds `site.orgId`, `public.site` and the `/de`, `/en` cache rules. `site.css` holds the public site styles (synthwerk#109). |
+| 2026-10-30 | The CSRF middleware also skips the two public lead POST routes; they check the site origin themselves. `nuxt.config.ts` adds `site.origin`, `site.trustForwardedFor` and `mail` (synthwerk#105). |
