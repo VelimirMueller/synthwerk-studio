@@ -4,7 +4,7 @@ slug: public-site
 status: beta
 epic: E6
 owner: studio
-paths: ["server/lib/site-api.ts", "server/lib/site-config.ts", "server/utils/site.ts", "server/api/site/**", "server/middleware/csrf.ts", "shared/site.ts", "app/pages/[locale]/**", "app/components/site/**", "app/composables/useConsent.ts", "app/composables/useLivePage.ts", "app/utils/consent.ts", "app/utils/site.ts", "app/assets/site.css"]
+paths: ["server/lib/site-api.ts", "server/lib/site-config.ts", "server/utils/site.ts", "server/api/site/**", "shared/site.ts", "app/pages/[locale]/**", "app/components/site/**", "app/composables/useConsent.ts", "app/composables/useLivePage.ts", "app/utils/consent.ts", "app/utils/site.ts", "app/assets/site.css"]
 api: ["GET /api/site/pages/{locale}/{slug}"]
 events: []
 mcp: []
@@ -99,7 +99,11 @@ updated: 2026-10-30
 
 ## Tests
 
-- `tests/server/site-api.test.ts`: live version, draft never shown, 404 without a live version, org and locale isolation, bad input, publish and roll back with a new ETag, 304, cookies ignored, 503 cases, no URL in logs, config check.
+- `tests/server/site-api.test.ts`:
+  - Live version only. The draft never shows. 404 without a live version.
+  - Org and locale isolation. Bad input.
+  - Publish and roll back give a new ETag. 304. Cookies have no effect.
+  - 503 cases. No URL in the logs. The config check.
 - `tests/app/consent.test.ts`: cookie values, cookie attributes, the analytics script gate.
 - `tests/app/site.test.ts`: routes, legal slugs, language switch, env banner, the same text keys in German and English.
 - No Playwright in this repo yet. Checked by hand in Chrome on a local build: banner, opt-in, withdraw, no request before consent.
