@@ -4,9 +4,9 @@ slug: page-builder
 status: beta
 epic: E6
 owner: studio
-paths: ["shared/sections.ts", "server/lib/builder-api.ts", "server/lib/builder-config.ts", "server/lib/builder-db.ts", "server/lib/builder-store.ts", "server/lib/org-admin.ts", "server/lib/body.ts", "server/api/builder/**", "server/utils/builder.ts", "server/utils/builder-store.ts", "app/pages/builder/**", "app/components/builder/**", "app/components/page/**", "app/composables/useBuilderApi.ts", "app/utils/builder.ts"]
+paths: ["shared/sections.ts", "server/lib/builder-api.ts", "server/lib/builder-config.ts", "server/lib/builder-db.ts", "server/lib/builder-store.ts", "server/lib/builder-relay.ts", "server/lib/builder-nats.ts", "server/lib/uuidv7.ts", "server/plugins/builder-relay.ts", "server/lib/org-admin.ts", "server/lib/body.ts", "server/api/builder/**", "server/utils/builder.ts", "server/utils/builder-store.ts", "app/pages/builder/**", "app/components/builder/**", "app/components/page/**", "app/composables/useBuilderApi.ts", "app/utils/builder.ts"]
 api: ["GET /api/builder/pages", "POST /api/builder/pages", "GET /api/builder/pages/{pageId}", "PUT /api/builder/pages/{pageId}/draft", "POST /api/builder/pages/{pageId}/publish", "POST /api/builder/pages/{pageId}/rollback", "GET /api/builder/pages/{pageId}/versions/{version}", "GET /api/builder/pages/{pageId}/events"]
-events: []
+events: ["dev.synthwerk.studio.page.created.v1", "dev.synthwerk.studio.page.published.v1", "dev.synthwerk.studio.page.rolled_back.v1"]
 mcp: []
 updated: 2026-10-30
 ---
@@ -20,7 +20,7 @@ updated: 2026-10-30
 > - Sections come from a fixed catalogue: hero, proof, benefits, pricing, FAQ, call to action. There is no free HTML.
 > - Text is plain, or a small Markdown subset that renders as Vue nodes. No `v-html`.
 > - The studio server owns the data: its own Postgres database (`NUXT_BUILDER_DATABASE_URL`). No other service reads it.
-> - Create, publish and roll back write an event to the page history.
+> - Create, publish and roll back write an event to the page history. A relay sends each event to the bus (`EVT_STUDIO`); identity shows publish and roll back in the org audit list (synthwerk#106).
 > - Proves the studio part of synthwerk#46. The public site (synthwerk#45) and the live demo (synthwerk#47) render what the builder publishes.
 
 ## Where the data lives
@@ -36,7 +36,7 @@ updated: 2026-10-30
 |---|---|
 | `builder_pages` | One row per page: org, slug, locale, the draft (`{ title, sections }`, jsonb), the draft revision, the live version |
 | `builder_page_versions` | One immutable row per published version: page, number (1, 2, 3, …), content, who, when |
-| `builder_events` | Create, publish and roll back. CloudEvents fields (`id`, `type`, `time`, `actor`, `subject`, `data`). `relayed_at` stays empty until a relay sends the rows to the bus |
+| `builder_events` | Create, publish and roll back. CloudEvents fields (`id` UUIDv7, `type`, `time`, `actor`, `subject`, `data`) and `identity_org_id`. The outbox of the relay: `relayed_at` is set when the event is on the bus, `relay_error` when a row can never be an event |
 | `builder_schema` | The applied migration versions |
 
 ## What it does
@@ -96,6 +96,7 @@ The BFF checks in this order and stops at the first refusal:
 
 - Set `NUXT_BUILDER_DATABASE_URL` to a `postgres://` URL of an empty database (or a database that has the builder tables). Env only: it holds the password. Local: `postgres://studio:studio@localhost:5432/studio`.
 - Set `NUXT_IDENTITY_URL` (see [users-and-audit](users-and-audit.md)).
+- To send the events to the bus, set `NUXT_BUILDER_NATS_URL` (`nats://bus:4222`, no credentials in the URL), `NUXT_BUILDER_NATS_USER` and `NUXT_BUILDER_NATS_PASSWORD` (env only), and `NUXT_BUILDER_PLATFORM_ENV` (`local`, `dev`, `stg`, `prd`; `ci` sends as `local`). Empty URL: no relay; the events wait in `builder_events` and go out after a start with the URL.
 - Sign in as an owner or an admin. Open **Builder** in the navigation.
 - Create a page: title, slug (`/pricing`), language.
 - Add sections, edit them, move them up and down. **Preview draft** shows the page as it will look.
@@ -124,8 +125,21 @@ The BFF checks in this order and stops at the first refusal:
 | `dev.synthwerk.studio.page.published.v1` | A version is published. Data: `page_id`, `slug`, `locale`, `version`, `previous_version` |
 | `dev.synthwerk.studio.page.rolled_back.v1` | An older version is live again. Same data |
 
-- The events go to `builder_events` and show in the page history. They are not on the bus yet, and not in the identity audit list.
-- The schemas are not in `synthwerk-contracts` yet. Draft saves write no event.
+- The schemas are in `synthwerk-contracts` (`events/studio`, tag `go/v0.12.0`). Draft saves write no event.
+- The events go to `builder_events` in the transaction of the change and show in the page history.
+- On the bus, `data` also holds `org_id`: the identity org UUID of the session org. `orgid` is the same; `subject` is the page id. No title and no section text.
+- Identity reads them from `EVT_STUDIO` into the org audit list (synthwerk-identity `docs/features/audit-list.md`).
+
+## Relay to the bus
+
+- `server/plugins/builder-relay.ts` starts the relay at server start (`server/lib/builder-relay.ts`, `builder-nats.ts`).
+- It applies the builder migrations, connects to NATS, and creates or updates the stream `EVT_STUDIO` (`evt.studio.>`, file storage, 30 days, duplicate window 2 min). Studio owns this stream. While the database or NATS is down, it tries again with backoff (1 s to 30 s).
+- Each run takes up to 20 rows with `relayed_at` empty, in `seq` order, `FOR UPDATE SKIP LOCKED`, in one transaction. It publishes each row (`Nats-Msg-Id` = event id, `Content-Type: application/cloudevents+json`) and sets `relayed_at`. A publish error stops the run: the rows before stay marked, the rest waits for the next run.
+- Delivery is at least once. A stop between the publish and the commit sends the row again with the same id: JetStream drops it in the 2 min window, identity drops it by id after that.
+- The publishes run inside the transaction that holds the row locks: with the 5 s publish timeout, a slow bus keeps one transaction open 100 s at most.
+- A row that can never be a valid event (no identity org id, an id that is not a UUIDv7, a bad actor) gets `relayed_at` and `relay_error`, and an ERROR log line with the event id. Rows from before the relay (migration 2) are closed that way. Such a row is never sent again by itself: to send it after a fix, set `relay_error` and `relayed_at` back to null.
+- The identity org id comes from identity (`GET /v1/me`), read in the same call that confirms the stored role (`server/lib/org-admin.ts`).
+- Logs: the error class only (`publish failed (NatsError)`, `database (28P01)`). No URL, no user, no password, no event data.
 
 ## Errors
 
@@ -161,13 +175,17 @@ The BFF checks in this order and stops at the first refusal:
   - Both 503 config cases. Database down: the log has no URL.
   - Inputs, the publish and roll back flow, conflicts, body limit.
 - `tests/server/body.test.ts`: the body cap on the web and the Node path. A chunked body over the cap stops the read.
+- `tests/server/builder-relay.test.ts`: the relay on PGlite with a fake bus.
+  - Create, publish, roll back: sent once, in order, then marked; the CloudEvent shape; no page text.
+  - A publish error mid-batch, a crash before the commit (same id again), batch size, a row that can never be an event, migration 2.
+  - Backoff logs without secrets, the start with retries, the relay settings.
+- `tests/server/builder-nats.test.ts`: opt-in against a real NATS (`BUILDER_TEST_NATS_URL`): stream create and update, a duplicate id, a subject outside `evt.studio.>` refused for the studio user.
 - `tests/app/builder.test.ts`: the page texts.
 
 ## Open points
 
 - The public site reads the live version through `GET /api/site/pages/{locale}/{slug}` (synthwerk#109). See [public-site](public-site.md).
 - Lead capture with double opt-in (acceptance criterion of #46) is not in this change.
-- No bus event and no identity audit entry yet. It needs the event schemas in `synthwerk-contracts`, a relay from `builder_events` and an identity consumer.
 - No Postgres for the studio in the compose stack and the prd setup yet (`synthwerk-infra`).
 - No delete or unpublish of a page. No copy of a version into the draft.
 - No Playwright e2e in this change. Add it with the local stack (synthwerk-e2e).
@@ -177,3 +195,4 @@ The BFF checks in this order and stops at the first refusal:
 | Date | Change |
 |---|---|
 | 2026-10-30 | First version: section editor, preview, publish, roll back, page history (synthwerk#46). |
+| 2026-10-30 | The relay sends `builder_events` to `EVT_STUDIO`; identity shows them in the org audit list. Migration 2: `identity_org_id`, `relay_error`; event ids are UUIDv7 (synthwerk#106). |

@@ -13,8 +13,8 @@ export interface Db {
 /**
  * The schema: one entry per version, one statement per item. Never change an applied entry:
  * add a new one.
- * builder_events is the audit trail of the builder and the outbox of its future bus events
- * (`relayed_at` stays null until a relay exists).
+ * builder_events is the audit trail of the builder and the outbox of its bus events: the relay
+ * (builder-relay.ts) publishes each row to EVT_STUDIO and sets `relayed_at` (synthwerk#106).
  */
 export const MIGRATIONS: readonly (readonly string[])[] = [
   [
@@ -52,6 +52,19 @@ export const MIGRATIONS: readonly (readonly string[])[] = [
       relayed_at timestamptz
     )`,
     'create index builder_events_org_subject_seq on builder_events (org_id, subject, seq desc)'
+  ],
+  // 2 (synthwerk#106): the relay to EVT_STUDIO. identity_org_id is the identity org UUID of the
+  // event (orgid on the bus). Rows from before the relay have none and a UUIDv4 id: they can never
+  // be valid events, so they are closed with a reason. They stay in the page history.
+  [
+    'alter table builder_events add column identity_org_id uuid',
+    'alter table builder_events add column relay_error text',
+    `update builder_events set relayed_at = now(),
+       relay_error = 'written before the relay: no identity org id'
+     where relayed_at is null`,
+    `alter table builder_events add constraint builder_events_relayable
+       check (identity_org_id is not null or relay_error is not null)`,
+    'create index builder_events_unrelayed on builder_events (seq) where relayed_at is null'
   ]
 ]
 

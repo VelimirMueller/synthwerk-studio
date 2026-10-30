@@ -19,6 +19,7 @@ import { type TestDb, testDb } from '../support/pglite'
 const ORG = 'site-org'
 const OTHER = 'other-org'
 const ADA = 'user:ada'
+const AUTHOR = { actor: ADA, identityOrgId: '0199f3a0-5b6c-7d8e-9f0a-1b2c3d4e5f60' }
 const SECRET_URL = 'postgres://studio:very-secret-pw@db.internal:5432/studio'
 
 let db: TestDb
@@ -59,12 +60,12 @@ function content(title: string, heading: string): PageContent {
 
 /** Creates a page, saves `drafts` one by one and publishes each. Returns the page id. */
 async function published(org: string, slug: string, locale: 'de' | 'en', ...drafts: PageContent[]) {
-  const page = await store.createPage(org, ADA, { slug, locale, title: 'x' })
+  const page = await store.createPage(org, AUTHOR, { slug, locale, title: 'x' })
   let revision = 1
   for (const draft of drafts) {
     await store.saveDraft(org, page.id, ADA, revision, draft)
     revision += 1
-    await store.publish(org, page.id, ADA, revision)
+    await store.publish(org, page.id, AUTHOR, revision)
   }
   return { id: page.id, revision }
 }
@@ -102,7 +103,7 @@ describe('GET /api/site/pages/{locale}/{slug}', () => {
   })
 
   it('answers 404 for a page without a live version', async () => {
-    await store.createPage(ORG, ADA, { slug: 'soon', locale: 'en', title: 'Soon' })
+    await store.createPage(ORG, AUTHOR, { slug: 'soon', locale: 'en', title: 'Soon' })
     const res = await site()('/api/site/pages/en/soon')
     expect(res.status).toBe(404)
     expect(await code(res)).toBe('page_not_found')
@@ -143,7 +144,7 @@ describe('GET /api/site/pages/{locale}/{slug}', () => {
     const v2Tag = v2.headers.get('etag') ?? ''
     expect(JSON.stringify(await v2.json())).toContain('Version two')
 
-    await store.rollback(ORG, id, ADA, 1)
+    await store.rollback(ORG, id, AUTHOR, 1)
     const v1 = await get('/api/site/pages/en/home', { 'if-none-match': v2Tag })
     expect(v1.status).toBe(200)
     expect(v1.headers.get('etag')).not.toBe(v2Tag)

@@ -2,6 +2,8 @@
 // Token claims can be stale after a demotion or a deactivation. Identity answers a one-item
 // members page only to an active stored owner or admin, so that call confirms the role.
 // Used by the BFF routes that call a service with a service credential (labels, builder).
+// It returns the identity org UUID of the caller (GET /v1/me, read for the members call anyway):
+// the builder writes it into its bus events (synthwerk#106).
 import { type IdentityConfig, IdentityConfigError } from './identity-config'
 import { MembersClient, MembersError } from './members'
 import type { SessionRecord } from './session'
@@ -22,7 +24,7 @@ export async function confirmOrgAdmin(
   identity: IdentityConfig | IdentityConfigError,
   record: SessionRecord,
   fetchImpl?: typeof fetch
-): Promise<void> {
+): Promise<string> {
   if (identity instanceof IdentityConfigError) {
     throw new OrgAdminError(503, 'identity_not_configured', identity.message)
   }
@@ -33,6 +35,8 @@ export async function confirmOrgAdmin(
   })
   try {
     await members.listMembers(undefined, 1)
+    // Cached by the client: listMembers read it first, so this makes no second call.
+    return await members.org()
   } catch (err) {
     if (!(err instanceof MembersError)) throw err
     if (err.status === 401) throw new OrgAdminError(401, 'unauthenticated', 'identity refused')

@@ -46,7 +46,16 @@ export default defineNuxtConfig({
     vision: { url: '', adminToken: '' },
     // The page builder database (synthwerk#46): NUXT_BUILDER_DATABASE_URL, a postgres:// URL owned
     // by the studio server. Env only (it holds the password). Server side only.
-    builder: { databaseUrl: '' },
+    // The relay of its events to EVT_STUDIO (synthwerk#106): NUXT_BUILDER_NATS_URL (empty = relay
+    // off), NUXT_BUILDER_NATS_USER, NUXT_BUILDER_NATS_PASSWORD (env only),
+    // NUXT_BUILDER_PLATFORM_ENV (local, dev, stg, prd or ci: the event source).
+    builder: {
+      databaseUrl: '',
+      natsUrl: '',
+      natsUser: '',
+      natsPassword: '',
+      platformEnv: 'local'
+    },
     // The public site (synthwerk#109, #45): NUXT_SITE_ORG_ID, the org whose live builder pages
     // /api/site serves. A config value, never a request value. Server side only.
     site: { orgId: '' },

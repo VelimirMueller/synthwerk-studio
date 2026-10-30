@@ -13,6 +13,8 @@ import { type TestDb, testDb } from '../support/pglite'
 const ORG = 'org-1'
 const OTHER = 'org-2'
 const ADA = 'user:ada'
+const IORG = '0199f3a0-5b6c-7d8e-9f0a-1b2c3d4e5f60'
+const AUTHOR = { actor: ADA, identityOrgId: IORG }
 
 let db: TestDb
 let store: BuilderStore
@@ -45,7 +47,7 @@ const refused = async (p: Promise<unknown>) => {
 }
 
 async function created(slug = 'home') {
-  return store.createPage(ORG, ADA, { slug, locale: 'en', title: 'Home' })
+  return store.createPage(ORG, AUTHOR, { slug, locale: 'en', title: 'Home' })
 }
 
 describe('migrate', () => {
@@ -86,8 +88,8 @@ describe('pages', () => {
   it('the same slug and locale twice - 409 slug_taken; another locale is fine', async () => {
     await created()
     expect(await refused(created())).toBe('409 slug_taken')
-    await store.createPage(ORG, ADA, { slug: 'home', locale: 'de', title: 'Start' })
-    await store.createPage(OTHER, ADA, { slug: 'home', locale: 'en', title: 'Home' })
+    await store.createPage(ORG, AUTHOR, { slug: 'home', locale: 'de', title: 'Start' })
+    await store.createPage(OTHER, AUTHOR, { slug: 'home', locale: 'en', title: 'Home' })
   })
 
   it('page limit per org - 409 page_limit_reached', async () => {
@@ -100,8 +102,8 @@ describe('pages', () => {
     expect(await store.listPages(OTHER)).toEqual([])
     expect(await refused(store.getPage(OTHER, page.id))).toBe('404 page_not_found')
     expect(await refused(store.saveDraft(OTHER, page.id, ADA, 1, v1))).toBe('404 page_not_found')
-    expect(await refused(store.publish(OTHER, page.id, ADA, 1))).toBe('404 page_not_found')
-    expect(await refused(store.rollback(OTHER, page.id, ADA, 1))).toBe('404 page_not_found')
+    expect(await refused(store.publish(OTHER, page.id, AUTHOR, 1))).toBe('404 page_not_found')
+    expect(await refused(store.rollback(OTHER, page.id, AUTHOR, 1))).toBe('404 page_not_found')
     expect(await refused(store.getVersion(OTHER, page.id, 1))).toBe('404 page_not_found')
     expect(await refused(store.listEvents(OTHER, page.id))).toBe('404 page_not_found')
   })
@@ -119,17 +121,17 @@ describe('draft, publish, roll back', () => {
   it('publish, change, publish, roll back: the old version is live again', async () => {
     const page = await created()
     await store.saveDraft(ORG, page.id, ADA, 1, v1)
-    expect(await refused(store.publish(ORG, page.id, ADA, 1))).toBe('409 draft_conflict')
-    const first = await store.publish(ORG, page.id, ADA, 2)
+    expect(await refused(store.publish(ORG, page.id, AUTHOR, 1))).toBe('409 draft_conflict')
+    const first = await store.publish(ORG, page.id, AUTHOR, 2)
     expect(first).toMatchObject({ liveVersion: 1, changed: false })
-    expect(await refused(store.publish(ORG, page.id, ADA, 2))).toBe('409 no_changes')
+    expect(await refused(store.publish(ORG, page.id, AUTHOR, 2))).toBe('409 no_changes')
 
     await store.saveDraft(ORG, page.id, ADA, 2, v2)
     expect((await store.getPage(ORG, page.id)).changed).toBe(true)
-    await store.publish(ORG, page.id, ADA, 3)
+    await store.publish(ORG, page.id, AUTHOR, 3)
     expect((await store.getLive(ORG, 'home', 'en'))?.content).toEqual(v2)
 
-    const back = await store.rollback(ORG, page.id, ADA, 1)
+    const back = await store.rollback(ORG, page.id, AUTHOR, 1)
     expect(back).toMatchObject({ liveVersion: 1, changed: true })
     const live = await store.getLive(ORG, 'home', 'en')
     expect(live).toMatchObject({ version: 1, title: 'Home', publishedBy: ADA })
@@ -142,12 +144,12 @@ describe('draft, publish, roll back', () => {
       [1, 'Home']
     ])
 
-    expect(await refused(store.rollback(ORG, page.id, ADA, 1))).toBe('409 already_live')
-    expect(await refused(store.rollback(ORG, page.id, ADA, 9))).toBe('404 version_not_found')
+    expect(await refused(store.rollback(ORG, page.id, AUTHOR, 1))).toBe('409 already_live')
+    expect(await refused(store.rollback(ORG, page.id, AUTHOR, 9))).toBe('404 version_not_found')
     expect(await refused(store.getVersion(ORG, page.id, 9))).toBe('404 version_not_found')
 
     // Roll forward again: no draft change needed.
-    expect(await store.rollback(ORG, page.id, ADA, 2)).toMatchObject({
+    expect(await store.rollback(ORG, page.id, AUTHOR, 2)).toMatchObject({
       liveVersion: 2,
       changed: false
     })
@@ -179,7 +181,7 @@ describe('draft, publish, roll back', () => {
         EVENT_TYPES.published +
         '$$)'
     )
-    await expect(store.publish(ORG, page.id, ADA, 2)).rejects.toThrow()
+    await expect(store.publish(ORG, page.id, AUTHOR, 2)).rejects.toThrow()
     const detail = await store.getPage(ORG, page.id)
     expect(detail.liveVersion).toBeNull()
     expect(detail.versions).toEqual([])
