@@ -7,6 +7,7 @@ import type { Locale } from '#shared/sections'
 const props = defineProps<{ locale: Locale; slug: string; title: string }>()
 const texts = computed(() => SITE_TEXTS[props.locale])
 const { load, openSettings } = useConsent()
+const { load: loadSiteConfig } = useSiteConfig()
 
 useHead(() => ({
   htmlAttrs: { lang: props.locale },
@@ -21,7 +22,10 @@ useHead(() => ({
   ]
 }))
 
-onMounted(load)
+onMounted(() => {
+  load()
+  void loadSiteConfig()
+})
 </script>
 
 <template>
