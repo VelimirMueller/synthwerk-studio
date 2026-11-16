@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { checkLeadEmail, checkLeadName } from '../../shared/leads'
 import {
   ContentError,
   checkContent,
@@ -216,4 +217,60 @@ it('newSectionId gives ids the checker accepts', () => {
   const ids = new Set(Array.from({ length: 50 }, () => newSectionId()))
   expect(ids.size).toBe(50)
   for (const id of ids) expect(id).toMatch(/^[a-z0-9]{1,24}$/)
+})
+
+describe('lead section (synthwerk#105)', () => {
+  const form = () => newSection('lead', 'l1')
+
+  it('the new section is valid and keeps only known fields', () => {
+    const page = checkContent({ title: 'Join', sections: [{ ...form(), extra: 'x' }] })
+    expect(page.sections[0]).toEqual(form())
+    expect(Object.keys(page.sections[0] ?? {})).not.toContain('extra')
+  })
+
+  it('needs a title, a consent text and a button label; nameField is a boolean', () => {
+    const bad = (patch: Record<string, unknown>) => () =>
+      checkContent({ title: 'Join', sections: [{ ...form(), ...patch }] })
+    expect(bad({ consent: ' ' })).toThrow('sections[0].consent: is required')
+    expect(bad({ title: '' })).toThrow('sections[0].title: is required')
+    expect(bad({ button: '' })).toThrow('sections[0].button: is required')
+    expect(bad({ button: 'x'.repeat(41) })).toThrow('sections[0].button')
+    expect(bad({ nameField: 'yes' })).toThrow('sections[0].nameField: must be true or false')
+    expect(
+      checkContent({ title: 'J', sections: [{ ...form(), nameField: undefined }] }).sections[0]
+    ).toMatchObject({ nameField: false })
+  })
+
+  it('one lead form per page', () => {
+    expect(() =>
+      checkContent({ title: 'Join', sections: [form(), newSection('lead', 'l2')] })
+    ).toThrow('sections[1].type: only one lead form per page')
+  })
+})
+
+describe('lead input checks (synthwerk#105)', () => {
+  it('checkLeadEmail takes plain addresses only', () => {
+    expect(checkLeadEmail(' Ada@Example.com ')).toBe('Ada@Example.com')
+    for (const bad of [
+      'a',
+      'a@b',
+      'a b@c.de',
+      'a@b.c\nx',
+      '"a"@b.de',
+      '<a@b.de>',
+      `${'x'.repeat(65)}@b.de`,
+      `a@${'b'.repeat(250)}.de`,
+      42
+    ]) {
+      expect(checkLeadEmail(bad)).toBeNull()
+    }
+  })
+
+  it('checkLeadName trims, allows empty, refuses long or control text', () => {
+    expect(checkLeadName(undefined)).toBe('')
+    expect(checkLeadName(' Ada ')).toBe('Ada')
+    expect(checkLeadName('x'.repeat(121))).toBeNull()
+    expect(checkLeadName('a\u0007')).toBeNull()
+    expect(checkLeadName(1)).toBeNull()
+  })
 })

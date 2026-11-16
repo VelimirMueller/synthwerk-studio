@@ -39,6 +39,14 @@ export function builderErrorText(error: { status: number; code: string }, field 
       return 'The request was refused. Reload the page and try again.'
     case 'unauthenticated':
       return 'Your session ended. Sign in again.'
+    case 'not_live':
+      return 'The page is not live. Nothing to unpublish.'
+    case 'owner_required':
+      return 'Only owners can delete a page.'
+    case 'confirm_mismatch':
+      return 'The slug you typed is not the slug of this page. Nothing was deleted.'
+    case 'lead_not_found':
+      return 'The lead was not found. Somebody may have deleted it already.'
   }
   if (error.status === 403) return builderErrorText({ status: 403, code: 'forbidden' })
   if (error.status === 503) return builderErrorText({ status: 503, code: 'builder_unavailable' })
@@ -52,6 +60,11 @@ export function builderEventText(type: string, data: Record<string, unknown>): s
   if (type === 'dev.synthwerk.studio.page.published.v1') return `Published ${v}`.trim()
   if (type === 'dev.synthwerk.studio.page.rolled_back.v1') {
     return v ? `Rolled back to ${v}` : 'Rolled back to an earlier version'
+  }
+  if (type === 'dev.synthwerk.studio.page.unpublished.v1') return 'Unpublished the page'
+  if (type === 'dev.synthwerk.studio.page.deleted.v1') return 'Deleted the page'
+  if (type === 'dev.synthwerk.studio.page.version_copied.v1') {
+    return v ? `Copied ${v} into the draft` : 'Copied a version into the draft'
   }
   return type
 }

@@ -63,3 +63,21 @@ it('cloneContent gives an independent copy', () => {
   b.sections.push({ id: 'c' })
   expect(a).toEqual({ title: 't', sections: [{ id: 'a' }] })
 })
+
+describe('synthwerk#105 and #108 texts', () => {
+  it('names the new events and codes', () => {
+    expect(builderEventText('dev.synthwerk.studio.page.unpublished.v1', {})).toBe(
+      'Unpublished the page'
+    )
+    expect(builderEventText('dev.synthwerk.studio.page.deleted.v1', {})).toBe('Deleted the page')
+    expect(builderEventText('dev.synthwerk.studio.page.version_copied.v1', { version: 2 })).toBe(
+      'Copied v2 into the draft'
+    )
+    expect(builderEventText('dev.synthwerk.studio.page.version_copied.v1', {})).toBe(
+      'Copied a version into the draft'
+    )
+    for (const code of ['not_live', 'owner_required', 'confirm_mismatch', 'lead_not_found']) {
+      expect(builderErrorText({ status: 409, code })).not.toBe('Something went wrong. Try again.')
+    }
+  })
+})

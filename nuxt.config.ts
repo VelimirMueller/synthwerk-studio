@@ -58,7 +58,14 @@ export default defineNuxtConfig({
     },
     // The public site (synthwerk#109, #45): NUXT_SITE_ORG_ID, the org whose live builder pages
     // /api/site serves. A config value, never a request value. Server side only.
-    site: { orgId: '' },
+    // The lead form (synthwerk#105): NUXT_SITE_ORIGIN, the public origin (the form must come from
+    // it, the confirm link points to it). NUXT_SITE_TRUST_FORWARDED_FOR=true behind the edge
+    // proxy: the rate limit takes the client address from X-Forwarded-For.
+    site: { orgId: '', origin: '', trustForwardedFor: false },
+    // Outgoing mail (synthwerk#105, #73): NUXT_MAIL_PROVIDER smtp (Mailpit, NUXT_MAIL_SMTP_URL
+    // smtp://mailpit:1025) or resend (NUXT_MAIL_RESEND_API_KEY, or the key in the file
+    // NUXT_MAIL_RESEND_API_KEY_FILE). NUXT_MAIL_FROM is the sender. Key: env or file only.
+    mail: { provider: '', from: '', smtpUrl: '', resendApiKey: '', resendApiKeyFile: '' },
     public: {
       // NUXT_PUBLIC_SITE_ENV (dev, stg, prd): every value but prd shows the test system banner.
       // Umami loads only after an opt-in: NUXT_PUBLIC_SITE_ANALYTICS_SCRIPT_URL (https or a path
@@ -91,6 +98,8 @@ export default defineNuxtConfig({
     '/api/labels/**': { headers: { 'cache-control': 'no-store' } },
     '/api/builder/**': { headers: { 'cache-control': 'no-store' } },
     '/api/me': { headers: { 'cache-control': 'no-store' } },
+    '/api/site/leads/**': { headers: { 'cache-control': 'no-store' } },
+    '/api/site/leads': { headers: { 'cache-control': 'no-store' } },
     // The public site: same HTML for every visitor (the consent banner is client side), so a CDN
     // may keep it for a short time. A new locale in shared/sections.ts LOCALES needs its two rules here. /api/site sets its own headers and an ETag (server/lib/site-api.ts).
     '/de': { headers: { 'cache-control': SITE_HTML_CACHE } },

@@ -1,7 +1,16 @@
 // The /api/builder BFF routes (synthwerk#46, docs/features/page-builder.md). The studio server
 // owns the builder data, so this class is the authorization point: session, CSRF on writes,
 // database settings, token role, org key, then the stored membership in identity.
-import { createError, getRouterParam, type H3Event, isError, setResponseStatus } from 'h3'
+import {
+  createError,
+  getQuery,
+  getRouterParam,
+  type H3Event,
+  isError,
+  setResponseHeader,
+  setResponseStatus
+} from 'h3'
+import type { Lead, LeadPage } from '../../shared/leads'
 import {
   ContentError,
   checkContent,
@@ -16,7 +25,8 @@ import { BuilderConfigError } from './builder-config'
 import { type Author, type BuilderStore, BuilderStoreError } from './builder-store'
 import { isOrgAdmin } from './health'
 import type { IdentityConfig, IdentityConfigError } from './identity-config'
-import { confirmOrgAdmin, OrgAdminError } from './org-admin'
+import { LeadStoreError } from './lead-store'
+import { type ConfirmedRole, confirmOrgAdmin, confirmOrgRole, OrgAdminError } from './org-admin'
 import type { SessionRecord } from './session'
 
 export interface BuilderApiDeps {
@@ -41,6 +51,7 @@ const STATUS_TEXT: Record<number, string> = {
   403: 'Forbidden',
   404: 'Not Found',
   409: 'Conflict',
+  410: 'Gone',
   413: 'Content Too Large',
   502: 'Bad Gateway',
   503: 'Service Unavailable'
@@ -53,6 +64,11 @@ interface Access {
   actor: string
   /** The actor and the identity org UUID, for the writes that emit an event. */
   author: Author
+  /**
+   * True when the token says owner and identity confirms the stored role owner (one more
+   * identity read, so only the routes that need it ask).
+   */
+  isOwner: () => Promise<boolean>
 }
 
 /** A refused input. `field` names the bad field for the editor. */
@@ -131,13 +147,9 @@ export class BuilderApi {
 
   /** GET /api/builder/pages/:pageId/versions/:version */
   version(event: H3Event) {
-    return this.run(event, false, ({ store, orgId }) => {
-      const raw = getRouterParam(event, 'version') ?? ''
-      if (!/^[1-9][0-9]{0,6}$/.test(raw) || Number(raw) > MAX_VERSION) {
-        throw new BuilderStoreError(404, 'version_not_found')
-      }
-      return store.getVersion(orgId, pageId(event), Number(raw))
-    })
+    return this.run(event, false, ({ store, orgId }) =>
+      store.getVersion(orgId, pageId(event), versionParam(event))
+    )
   }
 
   /** GET /api/builder/pages/:pageId/events -> the newest builder events of the page */
@@ -145,6 +157,67 @@ export class BuilderApi {
     return this.run(event, false, async ({ store, orgId }) => ({
       items: await store.listEvents(orgId, pageId(event))
     }))
+  }
+
+  /** POST /api/builder/pages/:pageId/unpublish: the public site answers 404 for the page. */
+  unpublish(event: H3Event) {
+    return this.run(event, true, ({ store, orgId, author }) =>
+      store.unpublish(orgId, pageId(event), author)
+    )
+  }
+
+  /** DELETE /api/builder/pages/:pageId { slug } -> 204. Owners only; `slug` confirms the page. */
+  remove(event: H3Event) {
+    return this.run(event, true, async ({ store, orgId, author, isOwner }) => {
+      if (!(await isOwner())) throw fail(403, 'owner_required')
+      const id = pageId(event)
+      const body = await readJson(event)
+      const slug = typeof body.slug === 'string' ? body.slug : ''
+      if (!SLUG_PATTERN.test(slug)) throw new InputError('invalid_request', 'slug')
+      await store.deletePage(orgId, id, author, slug)
+      setResponseStatus(event, 204)
+      return null
+    })
+  }
+
+  /** POST /api/builder/pages/:pageId/versions/:version/copy { revision }: version into the draft. */
+  copyVersion(event: H3Event) {
+    return this.run(event, true, async ({ store, orgId, author }) => {
+      const id = pageId(event)
+      const version = versionParam(event)
+      const body = await readJson(event)
+      const revision = positiveInt(body.revision, 'revision')
+      return store.copyVersionToDraft(orgId, id, author, version, revision)
+    })
+  }
+
+  /** GET /api/builder/leads?before= -> the confirmed leads of the org, newest first. */
+  leads(event: H3Event): Promise<LeadPage> {
+    return this.run(event, false, ({ store, orgId }) => {
+      const before = getQuery(event).before
+      return store.leads.list(orgId, typeof before === 'string' ? before : undefined)
+    })
+  }
+
+  /** GET /api/builder/leads/export -> text/csv of the confirmed leads (download). */
+  exportLeads(event: H3Event): Promise<string> {
+    return this.run(event, false, async ({ store, orgId }) => {
+      const csv = leadsCsv(await store.leads.exportAll(orgId))
+      setResponseHeader(event, 'content-type', 'text/csv; charset=utf-8')
+      setResponseHeader(event, 'content-disposition', 'attachment; filename="leads.csv"')
+      return csv
+    })
+  }
+
+  /** DELETE /api/builder/leads/:leadId -> 204. */
+  removeLead(event: H3Event) {
+    return this.run(event, true, async ({ store, orgId }) => {
+      const id = (getRouterParam(event, 'leadId') ?? '').toLowerCase()
+      if (!UUID_PATTERN.test(id)) throw new LeadStoreError(404, 'lead_not_found')
+      await store.leads.remove(orgId, id)
+      setResponseStatus(event, 204)
+      return null
+    })
   }
 
   /**
@@ -177,9 +250,14 @@ export class BuilderApi {
     }
     try {
       const actor = `user:${sub}`
-      return await action({ store, orgId, actor, author: { actor, identityOrgId } })
+      const claimsOwner = record.identity.roles.some(
+        (r) => r.role === 'owner' && r.orgIds.includes(orgId)
+      )
+      const isOwner = async () => claimsOwner && (await this.confirmRole(record)).role === 'owner'
+      return await action({ store, orgId, actor, isOwner, author: { actor, identityOrgId } })
     } catch (err) {
       if (err instanceof BuilderStoreError) throw fail(err.status, err.code)
+      if (err instanceof LeadStoreError) throw fail(err.status, err.code)
       if (err instanceof ContentError) throw fail(400, 'invalid_content', err.path)
       if (err instanceof InputError) throw fail(400, err.code, err.field)
       if (isError(err)) throw err
@@ -188,15 +266,28 @@ export class BuilderApi {
   }
 
   /** The identity org UUID of the session org, once identity confirmed the stored role. */
+  /** The stored role (owner or admin). Same error mapping as confirmAdmin. */
+  private async confirmRole(record: SessionRecord): Promise<ConfirmedRole> {
+    try {
+      return await confirmOrgRole(this.deps.identity, record, this.deps.fetch)
+    } catch (err) {
+      throw this.orgAdminFailure(err)
+    }
+  }
+
   private async confirmAdmin(record: SessionRecord): Promise<string> {
     try {
       return await confirmOrgAdmin(this.deps.identity, record, this.deps.fetch)
     } catch (err) {
-      if (!(err instanceof OrgAdminError)) throw err
-      if (err.status === 503) throw notConfigured(err.code, err.message)
-      if (err.status === 502) this.deps.log?.('warn', err.message)
-      throw fail(err.status, err.code)
+      throw this.orgAdminFailure(err)
     }
+  }
+
+  private orgAdminFailure(err: unknown): unknown {
+    if (!(err instanceof OrgAdminError)) return err
+    if (err.status === 503) return notConfigured(err.code, err.message)
+    if (err.status === 502) this.deps.log?.('warn', err.message)
+    return fail(err.status, err.code)
   }
 
   /** A database failure. The log names the error code only: no URL, no SQL, no content. */
@@ -206,6 +297,48 @@ export class BuilderApi {
     this.deps.log?.('warn', `database call failed (${typeof code === 'string' ? code : name})`)
     return fail(503, 'builder_unavailable')
   }
+}
+
+function versionParam(event: H3Event): number {
+  const raw = getRouterParam(event, 'version') ?? ''
+  if (!/^[1-9][0-9]{0,6}$/.test(raw) || Number(raw) > MAX_VERSION) {
+    throw new BuilderStoreError(404, 'version_not_found')
+  }
+  return Number(raw)
+}
+
+/**
+ * A CSV cell: quoted, quotes doubled. A cell that a spreadsheet would read as a formula (= + - @,
+ * tab, carriage return) gets a leading apostrophe (OWASP CSV injection).
+ */
+export function csvCell(value: string | number): string {
+  let text = String(value)
+  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`
+  return `"${text.replace(/"/g, '""')}"`
+}
+
+const CSV_HEADER = [
+  'email',
+  'name',
+  'page',
+  'locale',
+  'page_version',
+  'consent_text',
+  'created_at',
+  'confirmed_at'
+]
+
+/** The CSV export: a header line, one line per lead, CRLF line ends (RFC 4180). */
+export function leadsCsv(leads: readonly Lead[]): string {
+  const lines = [CSV_HEADER.join(',')]
+  for (const l of leads) {
+    lines.push(
+      [l.email, l.name, l.slug, l.locale, l.pageVersion, l.consentText, l.createdAt, l.confirmedAt]
+        .map(csvCell)
+        .join(',')
+    )
+  }
+  return `${lines.join('\r\n')}\r\n`
 }
 
 function pageId(event: H3Event): string {

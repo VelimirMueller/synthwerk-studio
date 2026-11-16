@@ -3,7 +3,7 @@
 // the builder store on PGlite.
 import { createApp, createRouter, eventHandler, toWebHandler } from 'h3'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { BuilderApi, MAX_BODY_BYTES } from '../../server/lib/builder-api'
+import { BuilderApi, csvCell, MAX_BODY_BYTES } from '../../server/lib/builder-api'
 import { BuilderConfigError, readBuilderConfig } from '../../server/lib/builder-config'
 import { BuilderStore } from '../../server/lib/builder-store'
 import { ROLES_CLAIM } from '../../server/lib/claims'
@@ -42,6 +42,7 @@ afterEach(() => db.close())
 interface Options {
   identity?: ReturnType<typeof readIdentityConfig> | IdentityConfigError
   store?: (() => Promise<BuilderStore>) | BuilderConfigError
+  fetch?: typeof fetch
 }
 
 function builderBrowser(options: Options = {}) {
@@ -49,7 +50,7 @@ function builderBrowser(options: Options = {}) {
     auth: harness.service,
     identity: options.identity ?? readIdentityConfig({ identity: { url: IDENTITY_URL } }),
     store: options.store ?? (async () => new BuilderStore(db)),
-    fetch: identity.fetch,
+    fetch: options.fetch ?? identity.fetch,
     log: (level, message) => logs.push(`${level}: ${message}`)
   })
   const app = createApp()
@@ -94,6 +95,30 @@ function builderBrowser(options: Options = {}) {
     .get(
       `${PAGES}/:pageId/events`,
       eventHandler((e) => api.events(e))
+    )
+    .post(
+      `${PAGES}/:pageId/unpublish`,
+      eventHandler((e) => api.unpublish(e))
+    )
+    .delete(
+      `${PAGES}/:pageId`,
+      eventHandler((e) => api.remove(e))
+    )
+    .post(
+      `${PAGES}/:pageId/versions/:version/copy`,
+      eventHandler((e) => api.copyVersion(e))
+    )
+    .get(
+      '/api/builder/leads',
+      eventHandler((e) => api.leads(e))
+    )
+    .get(
+      '/api/builder/leads/export',
+      eventHandler((e) => api.exportLeads(e))
+    )
+    .delete(
+      '/api/builder/leads/:leadId',
+      eventHandler((e) => api.removeLead(e))
     )
   app.use(router)
   const web = toWebHandler(app)
@@ -421,4 +446,270 @@ describe('readBuilderConfig', () => {
       }
     }
   )
+})
+
+describe('/api/builder - unpublish, delete, copy into draft (synthwerk#108)', () => {
+  async function livePage(browser: Browser, csrf: string) {
+    const page = await createPage(browser, csrf)
+    const content = { title: 'Home', sections: [newSection('hero', 'h1')] }
+    let res = await browser.fetch(
+      `${PAGES}/${page.id}/draft`,
+      send('PUT', csrf, { revision: 1, content })
+    )
+    expect(res.status).toBe(200)
+    res = await browser.fetch(`${PAGES}/${page.id}/publish`, send('POST', csrf, { revision: 2 }))
+    expect(res.status).toBe(201)
+    return page.id
+  }
+
+  const types = async (browser: Browser, id: string) =>
+    (
+      (await (await browser.fetch(`${PAGES}/${id}/events`)).json()) as { items: { type: string }[] }
+    ).items.map((e) => e.type.replace('dev.synthwerk.studio.page.', ''))
+
+  it('unpublish clears the live version and writes an event; a second time is 409 not_live', async () => {
+    const { browser, csrf } = await signedIn()
+    const id = await livePage(browser, csrf)
+    const res = await browser.fetch(`${PAGES}/${id}/unpublish`, send('POST', csrf))
+    expect(res.status).toBe(200)
+    expect((await res.json()).liveVersion).toBeNull()
+    expect((await types(browser, id))[0]).toBe('unpublished.v1')
+    const again = await browser.fetch(`${PAGES}/${id}/unpublish`, send('POST', csrf))
+    expect(again.status).toBe(409)
+    expect((await errorOf(again)).code).toBe('not_live')
+    const page = await (await browser.fetch(`${PAGES}/${id}`)).json()
+    expect(page.versions).toHaveLength(1)
+  })
+
+  it('unpublish needs the CSRF token', async () => {
+    const { browser, csrf } = await signedIn()
+    const id = await livePage(browser, csrf)
+    expect((await browser.fetch(`${PAGES}/${id}/unpublish`, send('POST', ''))).status).toBe(403)
+  })
+
+  it('copy puts a version into the draft with the revision; stale revision 409', async () => {
+    const { browser, csrf } = await signedIn()
+    const id = await livePage(browser, csrf)
+    const content = { title: 'Other', sections: [] }
+    await browser.fetch(`${PAGES}/${id}/draft`, send('PUT', csrf, { revision: 2, content }))
+    const stale = await browser.fetch(
+      `${PAGES}/${id}/versions/1/copy`,
+      send('POST', csrf, { revision: 2 })
+    )
+    expect(stale.status).toBe(409)
+    expect((await errorOf(stale)).code).toBe('draft_conflict')
+    const res = await browser.fetch(
+      `${PAGES}/${id}/versions/1/copy`,
+      send('POST', csrf, { revision: 3 })
+    )
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ draftRevision: 4, title: 'Home', changed: false })
+    expect((await types(browser, id))[0]).toBe('version_copied.v1')
+    const missing = await browser.fetch(
+      `${PAGES}/${id}/versions/9/copy`,
+      send('POST', csrf, { revision: 4 })
+    )
+    expect(missing.status).toBe(404)
+    expect((await errorOf(missing)).code).toBe('version_not_found')
+    const bad = await browser.fetch(
+      `${PAGES}/${id}/versions/0/copy`,
+      send('POST', csrf, { revision: 4 })
+    )
+    expect(bad.status).toBe(404)
+    const noRev = await browser.fetch(`${PAGES}/${id}/versions/1/copy`, send('POST', csrf, {}))
+    expect((await errorOf(noRev)).field).toBe('revision')
+  })
+
+  it('delete: owner, slug confirms; page gone, event stays', async () => {
+    const { browser, csrf } = await signedIn()
+    const id = await livePage(browser, csrf)
+    const wrong = await browser.fetch(`${PAGES}/${id}`, send('DELETE', csrf, { slug: 'other' }))
+    expect(wrong.status).toBe(409)
+    expect((await errorOf(wrong)).code).toBe('confirm_mismatch')
+    const noSlug = await browser.fetch(`${PAGES}/${id}`, send('DELETE', csrf, {}))
+    expect((await errorOf(noSlug)).field).toBe('slug')
+    const res = await browser.fetch(`${PAGES}/${id}`, send('DELETE', csrf, { slug: 'home' }))
+    expect(res.status).toBe(204)
+    expect((await browser.fetch(`${PAGES}/${id}`)).status).toBe(404)
+    const { rows } = await db.query<{ type: string; data: { slug: string } }>(
+      'select type, data from builder_events where subject = $1 order by seq desc limit 1',
+      [id]
+    )
+    expect(rows[0]?.type).toBe('dev.synthwerk.studio.page.deleted.v1')
+    expect(rows[0]?.data.slug).toBe('home')
+  })
+
+  it('delete: the token says owner, identity says admin (stale claim) - 403, nothing deleted', async () => {
+    const { browser, csrf, sub } = await signedIn()
+    const id = await livePage(browser, csrf)
+    identity.answers.set(`GET ${MEMBERS}`, {
+      status: 200,
+      body: {
+        items: [
+          { user_id: sub, role: 'admin', status: 'active', updated_at: '2026-10-30T09:00:00Z' }
+        ]
+      }
+    })
+    const res = await browser.fetch(`${PAGES}/${id}`, send('DELETE', csrf, { slug: 'home' }))
+    expect(res.status).toBe(403)
+    expect((await errorOf(res)).code).toBe('owner_required')
+    identity.answers.clear()
+    expect((await browser.fetch(`${PAGES}/${id}`)).status).toBe(200)
+  })
+
+  it('delete: the caller is not on the members pages - 403 forbidden', async () => {
+    const { browser, csrf } = await signedIn()
+    const id = await livePage(browser, csrf)
+    identity.answers.set(`GET ${MEMBERS}`, {
+      status: 200,
+      body: {
+        items: [
+          {
+            user_id: 'someone',
+            role: 'owner',
+            status: 'active',
+            updated_at: '2026-10-30T09:00:00Z'
+          }
+        ]
+      }
+    })
+    const res = await browser.fetch(`${PAGES}/${id}`, send('DELETE', csrf, { slug: 'home' }))
+    expect(res.status).toBe(403)
+    identity.answers.clear()
+    expect((await browser.fetch(`${PAGES}/${id}`)).status).toBe(200)
+  })
+
+  it('delete: the role read follows the members pages', async () => {
+    const { browser, csrf, sub } = await signedIn()
+    const id = await livePage(browser, csrf)
+    let calls = 0
+    const base = identity.fetch
+    const paged = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(String(input))
+      if (url.pathname.endsWith('/members') && (init?.method ?? 'GET') === 'GET') {
+        calls++
+        const first = !url.searchParams.get('cursor')
+        const items = first
+          ? [
+              {
+                user_id: 'other',
+                role: 'member',
+                status: 'active',
+                updated_at: '2026-10-30T09:00:00Z'
+              }
+            ]
+          : [{ user_id: sub, role: 'owner', status: 'active', updated_at: '2026-10-30T09:00:00Z' }]
+        return new Response(JSON.stringify(first ? { items, next_cursor: 'p2' } : { items }), {
+          status: 200
+        })
+      }
+      return base(input, init)
+    }) as typeof fetch
+    const other = builderBrowser({ fetch: paged })
+    for (const [k, v] of browser.cookies) other.cookies.set(k, v)
+    const res = await other.fetch(`${PAGES}/${id}`, send('DELETE', csrf, { slug: 'home' }))
+    expect(res.status).toBe(204)
+    expect(calls).toBeGreaterThanOrEqual(2)
+  })
+
+  it('delete: an admin gets 403 owner_required, nothing deleted', async () => {
+    provider.options = {
+      accessClaims: { [ROLES_CLAIM]: { admin: { [ORG_ID]: 'demo.auth.localhost' } } }
+    }
+    const { browser, csrf } = await signedIn()
+    const id = await livePage(browser, csrf)
+    const res = await browser.fetch(`${PAGES}/${id}`, send('DELETE', csrf, { slug: 'home' }))
+    expect(res.status).toBe(403)
+    expect((await errorOf(res)).code).toBe('owner_required')
+    expect((await browser.fetch(`${PAGES}/${id}`)).status).toBe(200)
+    // An admin may unpublish and copy.
+    expect((await browser.fetch(`${PAGES}/${id}/unpublish`, send('POST', csrf))).status).toBe(200)
+  })
+})
+
+describe('/api/builder/leads (synthwerk#105)', () => {
+  async function confirmedLead(email: string) {
+    const store = new BuilderStore(db)
+    const page = await store.createPage(
+      ORG_ID,
+      { actor: 'user:x', identityOrgId: ORG_UUID },
+      {
+        slug: `p${Math.random().toString(36).slice(2, 8)}`,
+        locale: 'en',
+        title: 'J'
+      }
+    )
+    const r = await store.leads.submit({
+      orgId: ORG_ID,
+      page: { id: page.id, slug: page.slug, locale: 'en', version: 1 },
+      sectionId: 'l1',
+      email,
+      name: '=HYPERLINK("x")',
+      consentText: 'I agree, "really".'
+    })
+    if (r.mail) await store.leads.confirm(r.token)
+  }
+
+  it('lists confirmed leads of the session org; member gets 403', async () => {
+    await confirmedLead('ada@example.com')
+    const { browser } = await signedIn()
+    const res = await browser.fetch('/api/builder/leads')
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.items.map((l: { email: string }) => l.email)).toEqual(['ada@example.com'])
+    expect(body.next).toBeNull()
+  })
+
+  it('CSV export: attachment, header, quoted cells, formula guard', async () => {
+    await confirmedLead('ada@example.com')
+    const { browser } = await signedIn()
+    const res = await browser.fetch('/api/builder/leads/export')
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toBe('text/csv; charset=utf-8')
+    expect(res.headers.get('content-disposition')).toBe('attachment; filename="leads.csv"')
+    const lines = (await res.text()).split('\r\n')
+    expect(lines[0]).toBe(
+      'email,name,page,locale,page_version,consent_text,created_at,confirmed_at'
+    )
+    expect(lines[1]).toContain('"ada@example.com","\'=HYPERLINK(""x"")"')
+    expect(lines[1]).toContain('"I agree, ""really""."')
+  })
+
+  it('delete a lead: CSRF needed, 204, then 404', async () => {
+    await confirmedLead('ada@example.com')
+    const { browser, csrf } = await signedIn()
+    const id = (await (await browser.fetch('/api/builder/leads')).json()).items[0].id
+    expect((await browser.fetch(`/api/builder/leads/${id}`, send('DELETE', ''))).status).toBe(403)
+    expect((await browser.fetch(`/api/builder/leads/${id}`, send('DELETE', csrf))).status).toBe(204)
+    const again = await browser.fetch(`/api/builder/leads/${id}`, send('DELETE', csrf))
+    expect(again.status).toBe(404)
+    expect((await errorOf(again)).code).toBe('lead_not_found')
+    expect(
+      (await browser.fetch('/api/builder/leads/not-a-uuid', send('DELETE', csrf))).status
+    ).toBe(404)
+  })
+
+  it('member role: 403 on the list and the export', async () => {
+    provider.options = {
+      accessClaims: { [ROLES_CLAIM]: { member: { [ORG_ID]: 'demo.auth.localhost' } } }
+    }
+    const { browser } = await signedIn()
+    expect((await browser.fetch('/api/builder/leads')).status).toBe(403)
+    expect((await browser.fetch('/api/builder/leads/export')).status).toBe(403)
+  })
+})
+
+describe('csvCell', () => {
+  it.each([
+    ['plain', '"plain"'],
+    ['=1+1', '"\'=1+1"'],
+    ['+1', '"\'+1"'],
+    ['-1', '"\'-1"'],
+    ['@x', '"\'@x"'],
+    ['\tx', '"\'\tx"'],
+    ['a"b', '"a""b"'],
+    [3, '"3"']
+  ])('%j -> %s', (value, expected) => {
+    expect(csvCell(value)).toBe(expected)
+  })
 })

@@ -76,5 +76,7 @@ defineProps<{ section: Section }>()
         <PageLink :link="section.cta" />
       </template>
     </SwCard>
+
+    <PageLeadForm v-else-if="section.type === 'lead'" :section="section" />
   </section>
 </template>

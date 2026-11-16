@@ -21,6 +21,17 @@ export const LEGAL_PLACEHOLDER = 'TODO: legal text, needs #49 sign-off'
 export const isLocale = (value: unknown): value is Locale =>
   typeof value === 'string' && LOCALES.includes(value as Locale)
 
+/** The confirm page of the lead form (synthwerk#105). A builder page with this slug never shows. */
+export const CONFIRM_SLUG = 'confirm'
+
+/** Where the lead form of a page sends to (provided by the public page, synthwerk#105). */
+export interface SitePageContext {
+  locale: Locale
+  slug: string
+}
+
+export const SITE_PAGE_KEY = 'synthwerk-site-page'
+
 /** The legal page of a slug in a locale, or null for a builder page. */
 export function legalPageOf(locale: Locale, slug: string): LegalPage | null {
   for (const page of LEGAL_PAGES) if (LEGAL_SLUGS[locale][page] === slug) return page
@@ -52,6 +63,25 @@ export interface SiteTexts {
   placeholderLabel: string
   notFound: string
   unavailable: string
+  /** The lead form and the confirm page (synthwerk#105). */
+  lead: {
+    email: string
+    name: string
+    sending: string
+    sent: string
+    preview: string
+    invalidEmail: string
+    consentRequired: string
+    tooMany: string
+    failed: string
+    confirmTitle: string
+    confirmBody: string
+    confirmButton: string
+    confirming: string
+    confirmed: string
+    linkInvalid: string
+    noToken: string
+  }
   consent: {
     title: string
     body: string
@@ -87,6 +117,25 @@ export const SITE_TEXTS: Record<Locale, SiteTexts> = {
     placeholderLabel: 'Platzhalter',
     notFound: 'Diese Seite gibt es nicht.',
     unavailable: 'Die Seite ist gerade nicht erreichbar. Bitte später erneut versuchen.',
+    lead: {
+      email: 'E-Mail-Adresse',
+      name: 'Name (optional)',
+      sending: 'Wird gesendet …',
+      sent: 'Fast geschafft: Wir haben Ihnen eine Mail geschickt. Bitte bestätigen Sie Ihre Adresse mit dem Link darin.',
+      preview: 'Vorschau: Das Formular sendet nichts.',
+      invalidEmail: 'Bitte geben Sie eine gültige E-Mail-Adresse ein.',
+      consentRequired: 'Bitte stimmen Sie zu, damit wir Ihre Adresse speichern dürfen.',
+      tooMany: 'Zu viele Versuche. Bitte später erneut versuchen.',
+      failed: 'Das hat nicht geklappt. Bitte später erneut versuchen.',
+      confirmTitle: 'E-Mail-Adresse bestätigen',
+      confirmBody: 'Klicken Sie auf den Knopf, um Ihre Adresse zu bestätigen.',
+      confirmButton: 'Adresse bestätigen',
+      confirming: 'Wird bestätigt …',
+      confirmed: 'Danke. Ihre Adresse ist bestätigt.',
+      linkInvalid:
+        'Der Link ist abgelaufen oder wurde schon benutzt. Tragen Sie Ihre Adresse bitte erneut ein.',
+      noToken: 'Diesem Link fehlt der Code. Öffnen Sie den Link aus der Mail.'
+    },
     consent: {
       title: 'Cookies und Statistik',
       body: 'Wir setzen nur notwendige Cookies. Mit Ihrer Einwilligung zählen wir Seitenaufrufe mit Umami. Sie können Ihre Wahl jederzeit unter „Cookie-Einstellungen“ ändern.',
@@ -126,6 +175,24 @@ export const SITE_TEXTS: Record<Locale, SiteTexts> = {
     placeholderLabel: 'Placeholder',
     notFound: 'This page does not exist.',
     unavailable: 'The page is not available now. Try again later.',
+    lead: {
+      email: 'Email address',
+      name: 'Name (optional)',
+      sending: 'Sending …',
+      sent: 'Almost done: we sent you a mail. Please confirm your address with the link in it.',
+      preview: 'Preview: the form sends nothing.',
+      invalidEmail: 'Please enter a valid email address.',
+      consentRequired: 'Please agree, so that we may store your address.',
+      tooMany: 'Too many tries. Please try again later.',
+      failed: 'That did not work. Please try again later.',
+      confirmTitle: 'Confirm your email address',
+      confirmBody: 'Click the button to confirm your address.',
+      confirmButton: 'Confirm address',
+      confirming: 'Confirming …',
+      confirmed: 'Thank you. Your address is confirmed.',
+      linkInvalid: 'The link has expired or was used already. Please enter your address again.',
+      noToken: 'This link has no code. Open the link from the mail.'
+    },
     consent: {
       title: 'Cookies and analytics',
       body: 'We use only essential cookies. With your consent we count page views with Umami. You can change your choice at any time under "Cookie settings".',
