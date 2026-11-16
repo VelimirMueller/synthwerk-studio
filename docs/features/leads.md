@@ -4,7 +4,7 @@ slug: leads
 status: beta
 epic: E6
 owner: studio
-paths: ["shared/leads.ts", "shared/sections.ts", "server/lib/lead-api.ts", "server/lib/lead-store.ts", "server/lib/mail.ts", "server/lib/rate-limit.ts", "server/lib/site-config.ts", "server/lib/account-api.ts", "server/api/site/leads/**", "server/api/builder/leads/**", "server/utils/leads.ts", "server/plugins/lead-purge.ts", "server/middleware/csrf.ts", "app/components/page/PageLeadForm.vue", "app/pages/[locale]/confirm.vue", "app/pages/leads.vue"]
+paths: ["shared/leads.ts", "shared/sections.ts", "server/lib/lead-api.ts", "server/lib/lead-store.ts", "server/lib/mail.ts", "server/lib/rate-limit.ts", "server/lib/site-config.ts", "server/lib/account-api.ts", "server/api/site/leads/**", "server/api/builder/leads/**", "server/utils/leads.ts", "server/plugins/lead-purge.ts", "server/middleware/csrf.ts", "server/lib/csrf-guard.ts", "app/components/page/PageLeadForm.vue", "app/pages/[locale]/confirm.vue", "app/pages/leads.vue"]
 api: ["POST /api/site/leads", "POST /api/site/leads/confirm", "GET /api/builder/leads", "GET /api/builder/leads/export", "DELETE /api/builder/leads/{leadId}"]
 events: []
 mcp: []
@@ -108,3 +108,4 @@ updated: 2026-10-30
 | Date | Change |
 |---|---|
 | 2026-10-30 | First version (synthwerk#105). |
+| 2026-11-16 | The lead POST exemption reads the path with repeated leading slashes collapsed (`server/lib/csrf-guard.ts`, synthwerk#59). |
