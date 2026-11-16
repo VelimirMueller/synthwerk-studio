@@ -63,7 +63,23 @@ export default defineNuxtConfig({
     // The lead form (synthwerk#105): NUXT_SITE_ORIGIN, the public origin (the form must come from
     // it, the confirm link points to it). NUXT_SITE_TRUST_FORWARDED_FOR=true behind the edge
     // proxy: the rate limit takes the client address from X-Forwarded-For.
-    site: { orgId: '', origin: '', trustForwardedFor: false },
+    // The live demo (synthwerk#47): signed-in visitors chat with llm and classify an image.
+    // NUXT_SITE_DEMO_APP_ID: the demo app in the demo org, with NUXT_SITE_ORIGIN as an allowed
+    // origin (empty = the image demo answers 503). Strict limits, in memory per process:
+    // NUXT_SITE_DEMO_USER_PER_MINUTE (5), NUXT_SITE_DEMO_USER_PER_DAY (30, UTC day),
+    // NUXT_SITE_DEMO_GLOBAL_PER_MINUTE (30), NUXT_SITE_DEMO_MAX_IN_FLIGHT (2 model calls at once).
+    site: {
+      orgId: '',
+      origin: '',
+      trustForwardedFor: false,
+      demo: {
+        appId: '',
+        userPerMinute: 5,
+        userPerDay: 30,
+        globalPerMinute: 30,
+        maxInFlight: 2
+      }
+    },
     // Outgoing mail (synthwerk#105, #73): NUXT_MAIL_PROVIDER smtp (Mailpit, NUXT_MAIL_SMTP_URL
     // smtp://mailpit:1025) or resend (NUXT_MAIL_RESEND_API_KEY, or the key in the file
     // NUXT_MAIL_RESEND_API_KEY_FILE). NUXT_MAIL_FROM is the sender. Key: env or file only.
@@ -102,6 +118,7 @@ export default defineNuxtConfig({
     '/api/me': { headers: { 'cache-control': 'no-store' } },
     '/api/site/leads/**': { headers: { 'cache-control': 'no-store' } },
     '/api/site/leads': { headers: { 'cache-control': 'no-store' } },
+    '/api/site/demo/**': { headers: { 'cache-control': 'no-store' } },
     // The public site: same HTML for every visitor (the consent banner is client side), so a CDN
     // may keep it for a short time. A new locale in shared/sections.ts LOCALES needs its two rules here. /api/site sets its own headers and an ETag (server/lib/site-api.ts).
     '/de': { headers: { 'cache-control': SITE_HTML_CACHE } },

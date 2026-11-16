@@ -8,7 +8,7 @@ paths: ["shared/sections.ts", "server/lib/builder-api.ts", "server/lib/builder-c
 api: ["GET /api/builder/pages", "POST /api/builder/pages", "GET /api/builder/pages/{pageId}", "PUT /api/builder/pages/{pageId}/draft", "POST /api/builder/pages/{pageId}/publish", "POST /api/builder/pages/{pageId}/rollback", "GET /api/builder/pages/{pageId}/versions/{version}", "GET /api/builder/pages/{pageId}/events", "POST /api/builder/pages/{pageId}/unpublish", "DELETE /api/builder/pages/{pageId}", "POST /api/builder/pages/{pageId}/versions/{version}/copy"]
 events: ["dev.synthwerk.studio.page.created.v1", "dev.synthwerk.studio.page.published.v1", "dev.synthwerk.studio.page.rolled_back.v1", "dev.synthwerk.studio.page.unpublished.v1", "dev.synthwerk.studio.page.deleted.v1", "dev.synthwerk.studio.page.version_copied.v1"]
 mcp: []
-updated: 2026-10-30
+updated: 2026-11-16
 ---
 
 # Page builder with preview, publish, roll back, unpublish and delete
@@ -221,3 +221,4 @@ The BFF checks in this order and stops at the first refusal:
 | 2026-10-30 | The relay sends `builder_events` to `EVT_STUDIO`; identity shows them in the org audit list. Migration 2: `identity_org_id`, `relay_error`; event ids are UUIDv7 (synthwerk#106). |
 | 2026-10-30 | Least privilege on NATS: studio no longer creates or updates `EVT_STUDIO` (infra creates it) and reads its replies on `_INBOX_studio` (synthwerk#106). |
 | 2026-10-30 | Unpublish, delete, copy a version into the draft (synthwerk#108). Lead form section (synthwerk#105). |
+| 2026-11-16 | `server/lib/body.ts` adds `readRawBodyCapped` for the demo image upload. Same size cap and errors (synthwerk#47). |

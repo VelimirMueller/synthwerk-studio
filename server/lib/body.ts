@@ -118,3 +118,10 @@ export async function readJsonBody(
     throw invalid()
   }
 }
+
+/** The raw body with the same size cap and errors as readJsonBody (the demo image upload). */
+export async function readRawBodyCapped(event: H3Event, max: number): Promise<Buffer> {
+  const length = Number(getHeader(event, 'content-length') ?? '')
+  if (Number.isFinite(length) && length > max) throw tooLarge(event)
+  return Buffer.concat(await readCapped(event, max))
+}
