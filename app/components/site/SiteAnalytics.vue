@@ -1,11 +1,14 @@
 <script setup lang="ts">
 // The script gate of the public site (synthwerk#45). Umami loads only when the visitor allowed
 // analytics and NUXT_PUBLIC_SITE_ANALYTICS_SCRIPT_URL and _WEBSITE_ID are set. Without both,
-// no request leaves the page. The server never renders the script tag.
+// no request leaves the page. The server never renders the script tag. On a prerendered page the
+// script waits for the settings of the running server (useSiteConfig).
 const { state } = useConsent()
-const config = useRuntimeConfig().public.site
+const site = useSiteConfig()
 const script = computed(() =>
-  state.value.ready ? analyticsScript(state.value.choice, config.analytics) : null
+  state.value.ready && site.ready.value
+    ? analyticsScript(state.value.choice, site.config.value.analytics)
+    : null
 )
 
 useHead(() => ({

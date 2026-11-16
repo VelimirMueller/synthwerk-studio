@@ -4,12 +4,13 @@
 import type { Locale } from '#shared/sections'
 
 const props = defineProps<{ locale: Locale }>()
-const env = useRuntimeConfig().public.site.env
-const text = computed(() => SITE_TEXTS[props.locale].envBanner(String(env ?? '')))
+// The env of the running server, also on a prerendered page (useSiteConfig).
+const { config } = useSiteConfig()
+const text = computed(() => SITE_TEXTS[props.locale].envBanner(config.value.env))
 </script>
 
 <template>
-  <p v-if="showEnvBanner(env)" class="site-env-banner" role="note" data-site-env-banner>
+  <p v-if="showEnvBanner(config.env)" class="site-env-banner" role="note" data-site-env-banner>
     {{ text }}
   </p>
 </template>

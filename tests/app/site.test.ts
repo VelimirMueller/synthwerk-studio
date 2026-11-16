@@ -12,6 +12,7 @@ import {
   switchPath
 } from '../../app/utils/site'
 import { LOCALES, SLUG_PATTERN } from '../../shared/sections'
+import { LEGAL_PATHS, publicSiteConfig } from '../../shared/site'
 
 describe('public site routes', () => {
   it('knows the locales', () => {
@@ -63,5 +64,47 @@ describe('public site routes', () => {
       )
     expect(keys(SITE_TEXTS.de)).toEqual(keys(SITE_TEXTS.en))
     expect(SITE_TEXTS.de.consent.accept).not.toBe(SITE_TEXTS.en.consent.accept)
+  })
+
+  it('prerenders exactly the legal page of every locale', () => {
+    expect([...LEGAL_PATHS].sort()).toEqual(
+      [
+        '/de/cookies',
+        '/de/datenschutz',
+        '/de/impressum',
+        '/en/cookies',
+        '/en/imprint',
+        '/en/privacy'
+      ].sort()
+    )
+    for (const path of LEGAL_PATHS) {
+      const [, locale, slug] = path.split('/')
+      expect(isLocale(locale) && legalPageOf(locale, slug ?? '')).toBeTruthy()
+    }
+  })
+})
+
+describe('public site settings', () => {
+  it('reads the runtime config and the /api/site/config answer', () => {
+    expect(
+      publicSiteConfig({
+        env: 'prd',
+        analytics: { scriptUrl: 'https://umami.example/script.js', websiteId: 'abc-123' }
+      })
+    ).toEqual({
+      env: 'prd',
+      analytics: { scriptUrl: 'https://umami.example/script.js', websiteId: 'abc-123' }
+    })
+  })
+
+  it('makes anything else empty, so the banner shows and no analytics loads', () => {
+    const empty = { env: '', analytics: { scriptUrl: '', websiteId: '' } }
+    for (const value of [undefined, null, 'prd', 42, {}, { analytics: null }]) {
+      expect(publicSiteConfig(value)).toEqual(empty)
+    }
+    expect(publicSiteConfig({ env: 1, analytics: { scriptUrl: ['x'], websiteId: {} } })).toEqual(
+      empty
+    )
+    expect(showEnvBanner(publicSiteConfig(undefined).env)).toBe(true)
   })
 })

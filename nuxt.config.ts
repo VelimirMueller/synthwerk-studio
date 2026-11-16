@@ -1,3 +1,5 @@
+import { LEGAL_PATHS } from './shared/site'
+
 // Studio app. The server routes in server/api/auth are the BFF: they run the OIDC code flow
 // with Zitadel and keep every token on the server (synthwerk#95, docs/features/sign-in.md).
 // Public HTML: one minute fresh, five minutes stale while a CDN asks again.
@@ -105,7 +107,11 @@ export default defineNuxtConfig({
     '/de': { headers: { 'cache-control': SITE_HTML_CACHE } },
     '/de/**': { headers: { 'cache-control': SITE_HTML_CACHE } },
     '/en': { headers: { 'cache-control': SITE_HTML_CACHE } },
-    '/en/**': { headers: { 'cache-control': SITE_HTML_CACHE } }
+    '/en/**': { headers: { 'cache-control': SITE_HTML_CACHE } },
+    // The legal pages are static: prerendered at build time, served as files with the headers
+    // above (#45). Their HTML holds the public runtime config of the build, so the client asks
+    // /api/site/config for the live values (app/composables/useSiteConfig.ts).
+    ...Object.fromEntries(LEGAL_PATHS.map((path) => [path, { prerender: true }]))
   },
   typescript: { strict: true }
 })

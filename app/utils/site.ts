@@ -2,18 +2,14 @@
 // Legal content is not written here. It needs the legal sign-off of synthwerk#49: until then
 // every legal page shows LEGAL_PLACEHOLDER and nothing else as its text.
 import { LOCALES, type Locale } from '#shared/sections'
+import { LEGAL_PAGES, LEGAL_SLUGS, type LegalPage } from '#shared/site'
 
 /** The builder slug of the start page of a locale (`/de`, `/en`). */
 export const HOME_SLUG = 'home'
 
-export const LEGAL_PAGES = ['imprint', 'privacy', 'cookies'] as const
-export type LegalPage = (typeof LEGAL_PAGES)[number]
-
-/** The legal pages are static routes. A builder page with the same slug never shows. */
-export const LEGAL_SLUGS: Record<Locale, Record<LegalPage, string>> = {
-  de: { imprint: 'impressum', privacy: 'datenschutz', cookies: 'cookies' },
-  en: { imprint: 'imprint', privacy: 'privacy', cookies: 'cookies' }
-}
+// The legal pages live in shared/site.ts: nuxt.config.ts prerenders their paths.
+export type { LegalPage }
+export { LEGAL_PAGES, LEGAL_SLUGS }
 
 /** The one placeholder of every legal text. Do not replace it without the #49 sign-off. */
 export const LEGAL_PLACEHOLDER = 'TODO: legal text, needs #49 sign-off'
