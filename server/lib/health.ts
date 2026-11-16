@@ -118,6 +118,17 @@ export class HealthService {
   }
 
   /**
+   * GET /api/health/alerts: the active alerts of pulse (synthwerk#57). Same access as the
+   * status. Pulse sends the trace links to operators only.
+   */
+  async alerts(event: H3Event) {
+    const { record } = await this.access(event)
+    const res = await this.call('/v1/alerts', record)
+    if (!res.ok) this.refused(res, '/v1/alerts')
+    return (await res.json()) as unknown
+  }
+
+  /**
    * GET /api/health/metrics. Operators get the platform numbers. Owners and admins get the
    * numbers of the org of their session; the org id never comes from the request.
    */

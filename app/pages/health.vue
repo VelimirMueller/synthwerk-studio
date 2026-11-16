@@ -12,6 +12,7 @@ import {
   parseFrame,
   type StatusChange
 } from '~/composables/useHealthView'
+import { type AlertsAnswer, costTotal, formatCost } from '~/utils/health'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -24,6 +25,9 @@ const allowed = computed(() => canViewHealth(session.value))
 const targets = ref<HealthTarget[]>([])
 const live = ref(false)
 const metrics = ref<MetricsAnswer | null>(null)
+const alerts = ref<AlertsAnswer | null>(null)
+const alertsFailed = ref(false)
+const now = ref(Date.now())
 const error = ref('')
 
 const errorText: Record<string, string> = {
@@ -51,6 +55,22 @@ async function loadMetrics() {
   } catch (err) {
     error.value = readError(err)
   }
+}
+
+// A failed alerts load keeps the last list and never hides the other numbers.
+async function loadAlerts() {
+  try {
+    alerts.value = await $fetch<AlertsAnswer>('/api/health/alerts')
+    alertsFailed.value = false
+  } catch {
+    alertsFailed.value = true
+  }
+  now.value = Date.now()
+}
+
+function refresh() {
+  void loadMetrics()
+  void loadAlerts()
 }
 
 let source: EventSource | undefined
@@ -99,8 +119,8 @@ onMounted(() => {
   mounted = true
   if (!allowed.value) return
   openStream()
-  void loadMetrics()
-  timer = setInterval(loadMetrics, METRICS_EVERY_MS)
+  refresh()
+  timer = setInterval(refresh, METRICS_EVERY_MS)
 })
 
 onBeforeUnmount(() => {
@@ -119,6 +139,8 @@ const windowMinutes = computed(() =>
 const updated = computed(() =>
   metrics.value ? new Date(metrics.value.metrics.generated_at).toLocaleTimeString('en-GB') : ''
 )
+const cost = computed(() => metrics.value?.metrics.ai_cost ?? null)
+const costSum = computed(() => (cost.value ? costTotal(cost.value) : null))
 const down = computed(() => targets.value.filter((t) => t.status === 'down').length)
 
 const ratio = (used: number, total: number) => (total > 0 ? used / total : null)
@@ -148,6 +170,21 @@ const ratio = (used: number, total: number) => (total > 0 ? used / total : null)
     <template v-else>
       <p v-if="error" class="notice" role="alert">{{ error }}</p>
 
+      <section class="health__section" aria-labelledby="h-alerts">
+        <div class="section-head">
+          <h2 id="h-alerts">Alerts</h2>
+          <span class="muted">{{
+            alertsFailed
+              ? 'Alerts did not load. Retrying.'
+              : alerts
+                ? `${alerts.alerts.length} active`
+                : 'Loading'
+          }}</span>
+        </div>
+        <HealthAlertList v-if="alerts" :alerts="alerts.alerts" :now="now" />
+        <p v-else-if="alertsFailed" class="muted">No alert data yet.</p>
+      </section>
+
       <section class="health__section" aria-labelledby="h-status">
         <div class="section-head">
           <h2 id="h-status">Live status</h2>
@@ -175,6 +212,25 @@ const ratio = (used: number, total: number) => (total > 0 ? used / total : null)
             :hint="ai && ai.failed > 0 ? `${ai.failed} failed` : 'Completed answers'"
           />
         </dl>
+      </section>
+
+      <section class="health__section" aria-labelledby="h-cost">
+        <div class="section-head">
+          <h2 id="h-cost">AI cost per day</h2>
+          <span class="muted">{{
+            cost && costSum
+              ? `7 days: ${formatCost(costSum.cost, cost.currency)}${metrics?.scope === 'org' ? ', your org' : ''}`
+              : 'Last 7 days'
+          }}</span>
+        </div>
+        <template v-if="cost">
+          <HealthCostTable :cost="cost" />
+          <p v-if="costSum && costSum.unpriced > 0" class="muted small">
+            {{ costSum.unpriced }} answers have no price. Add their provider and model to the pulse
+            price table.
+          </p>
+        </template>
+        <p v-else class="muted">No cost data. Pulse cannot read the AI usage now.</p>
       </section>
 
       <template v-if="platform">
@@ -271,6 +327,11 @@ const ratio = (used: number, total: number) => (total > 0 ? used / total : null)
 }
 
 .section-head .muted {
+  font-size: var(--text-sm);
+}
+
+.small {
+  margin: 0;
   font-size: var(--text-sm);
 }
 

@@ -50,7 +50,10 @@ interface PulseCall {
 }
 
 /** A fake pulse with the same rules as synthwerk-pulse internal/app.API. */
-function fakePulse(calls: PulseCall[], state: { down: boolean }): typeof fetch {
+function fakePulse(
+  calls: PulseCall[],
+  state: { down: boolean; alertsStatus?: number }
+): typeof fetch {
   return async (input, init) => {
     const url = new URL(String(input))
     const authorization = new Headers(init?.headers).get('authorization') ?? ''
@@ -82,6 +85,16 @@ function fakePulse(calls: PulseCall[], state: { down: boolean }): typeof fetch {
       })
       return new Response(body, { headers: { 'content-type': 'text/event-stream' } })
     }
+    if (url.pathname === '/v1/alerts') {
+      if (!operator && !orgAdmin(id.org.id)) return forbidden()
+      if (state.alertsStatus) return new Response('boom', { status: state.alertsStatus })
+      // Pulse sends trace links to operators only.
+      const trace = operator ? 'http://grafana.test/explore?trace=abc' : null
+      return json({
+        generated_at: '2026-10-30T08:00:00Z',
+        alerts: [{ id: 'target_down:llm', rule: 'target_down', trace_url: trace }]
+      })
+    }
     if (url.pathname === '/v1/metrics') {
       return operator ? json({ window_seconds: 300, host: {}, ai: { answers: 9 } }) : forbidden()
     }
@@ -96,7 +109,7 @@ function fakePulse(calls: PulseCall[], state: { down: boolean }): typeof fetch {
 }
 
 let calls: PulseCall[]
-let state: { down: boolean }
+let state: { down: boolean; alertsStatus?: number }
 let baseUrl: string
 
 function handler() {
@@ -118,6 +131,10 @@ function handler() {
     .get(
       '/api/health/metrics',
       eventHandler((e) => health.metrics(e))
+    )
+    .get(
+      '/api/health/alerts',
+      eventHandler((e) => health.alerts(e))
     )
     .get(
       '/api/health/stream',
@@ -218,6 +235,49 @@ describe('scope per role', () => {
   it('GET /api/health/metrics - member - 403, pulse not called', async () => {
     expect((await get('/api/health/metrics', 'member')).status).toBe(403)
     expect(calls).toEqual([])
+  })
+})
+
+describe('alerts', () => {
+  it('GET /api/health/alerts - member - 403, pulse not called', async () => {
+    const { status, body } = await get('/api/health/alerts', 'member')
+    expect(status).toBe(403)
+    expect(body.data).toEqual({ code: 'forbidden' })
+    expect(calls).toEqual([])
+  })
+
+  it('GET /api/health/alerts - no session - 401, pulse not called', async () => {
+    expect((await get('/api/health/alerts')).status).toBe(401)
+    expect(calls).toEqual([])
+  })
+
+  it('GET /api/health/alerts - org admin - pulse answer passed through, no trace link', async () => {
+    const { status, body } = await get('/api/health/alerts', 'admin')
+    expect(status).toBe(200)
+    expect(body).toEqual({
+      generated_at: '2026-10-30T08:00:00Z',
+      alerts: [{ id: 'target_down:llm', rule: 'target_down', trace_url: null }]
+    })
+    expect(calls).toEqual([{ path: '/v1/alerts', authorization: 'Bearer token-admin' }])
+  })
+
+  it('GET /api/health/alerts - operator - trace link from pulse', async () => {
+    const { body } = await get('/api/health/alerts', 'operator')
+    expect((body.alerts as { trace_url: string }[])[0]?.trace_url).toBe(
+      'http://grafana.test/explore?trace=abc'
+    )
+  })
+
+  it('GET /api/health/alerts - pulse answers 500 - 502 pulse_unavailable', async () => {
+    state.alertsStatus = 500
+    const { status, body } = await get('/api/health/alerts', 'operator')
+    expect(status).toBe(502)
+    expect(body.data).toEqual({ code: 'pulse_unavailable' })
+  })
+
+  it('GET /api/health/alerts - pulse down - 502', async () => {
+    state.down = true
+    expect((await get('/api/health/alerts', 'admin')).status).toBe(502)
   })
 })
 
