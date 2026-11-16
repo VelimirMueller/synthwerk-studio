@@ -4,7 +4,7 @@ slug: sign-in
 status: beta
 epic: E2
 owner: studio
-paths: ["server/api/auth/**", "server/lib/auth.ts", "server/lib/claims.ts", "server/lib/config.ts", "server/lib/oidc.ts", "server/lib/seal.ts", "server/lib/session.ts", "server/utils/auth.ts", "server/middleware/**", "app/middleware/**", "app/composables/useAuthSession.ts", "app/pages/index.vue", "app/pages/me.vue", "app/assets/app.css"]
+paths: ["server/api/auth/**", "server/lib/auth.ts", "server/lib/claims.ts", "server/lib/config.ts", "server/lib/oidc.ts", "server/lib/seal.ts", "server/lib/session.ts", "server/utils/auth.ts", "server/middleware/**", "server/lib/csrf-guard.ts", "app/middleware/**", "app/composables/useAuthSession.ts", "app/pages/index.vue", "app/pages/me.vue", "app/assets/app.css"]
 api: ["GET /api/auth/login", "GET /api/auth/reauth", "GET /api/auth/callback", "GET /api/auth/session", "POST /api/auth/logout"]
 events: []
 mcp: []
@@ -141,3 +141,4 @@ updated: 2026-10-30
 | 2026-10-30 | `app.css` adds the builder editor and the page section styles (synthwerk#46). The navigation links Builder. `nuxt.config.ts` has `builder.databaseUrl` and `/api/builder/**` is `no-store`. |
 | 2026-10-30 | The CSRF middleware skips `GET` and `HEAD` on `/api/site/`, the public read route. `nuxt.config.ts` adds `site.orgId`, `public.site` and the `/de`, `/en` cache rules. `site.css` holds the public site styles (synthwerk#109). |
 | 2026-10-30 | The CSRF middleware also skips the two public lead POST routes; they check the site origin themselves. `nuxt.config.ts` adds `site.origin`, `site.trustForwardedFor` and `mail` (synthwerk#105). |
+| 2026-11-16 | The CSRF middleware checks every unsafe request on every path, not only `/api`. The skip rules live in `server/lib/csrf-guard.ts` and collapse a leading `//`. Nuxt 4.6.4 closes the `//` path bypass of server middleware (synthwerk#59). |
