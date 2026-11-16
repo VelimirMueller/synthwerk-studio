@@ -61,3 +61,4 @@ updated: 2026-10-30
 | Date | Change |
 |---|---|
 | 2026-10-30 | First version (synthwerk#41). |
+| 2026-11-16 | When identity closes the session org with the account, the studio deletes the leads of that org. A failed delete is logged; the account delete still succeeds (synthwerk#105). |
