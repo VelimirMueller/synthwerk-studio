@@ -116,7 +116,8 @@ updated: 2026-11-16
 ## Placeholders
 
 - Legal text: `TODO: legal text, needs #49 sign-off`. Velimir and legal write the texts. Do not write legal text in code.
-- Mascot (#48) and chat widget: empty `data-site-slot` elements. They load nothing.
+- Mascot (#48): an empty `data-site-slot` element. It loads nothing.
+- The `widget` place holds the live demo. It asks nothing before a click. See [site-demo](site-demo.md).
 
 ## How to use
 
@@ -147,7 +148,7 @@ updated: 2026-11-16
 
 - Legal texts and the #49 sign-off.
 - Builder pages: a build-time prerender waits for the hosting decision (#8). Today SSR with a CDN cache (see [Prerender](#prerender)).
-- Mascot (#48) and widget wiring.
+- Mascot (#48) wiring.
 - The builder does not refuse a legal slug. Such a page never shows.
 
 ## Changes
@@ -157,3 +158,4 @@ updated: 2026-11-16
 | 2026-10-30 | First version: live read route, public SSR pages, legal placeholders, consent banner (synthwerk#109, #45). |
 | 2026-10-30 | Confirm page of the lead form; an unpublished page answers 404 (synthwerk#105, #108). |
 | 2026-11-16 | Legal pages prerendered in German and English. `GET /api/site/config` gives the live settings to prerendered pages. Builder pages stay SSR: decision recorded (synthwerk#45). |
+| 2026-11-16 | The `widget` place holds the live demo, and the site shows public numbers. See [site-demo](site-demo.md) (synthwerk#47). |

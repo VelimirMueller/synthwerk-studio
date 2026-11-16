@@ -2,6 +2,7 @@
 // The frame of every public page (synthwerk#45): language, skip link, test system banner,
 // legal links, cookie settings, the consent banner and the script gate. No session, no studio
 // navigation. Every request goes to the own origin until the visitor allows analytics.
+// The live demo (synthwerk#47) fills the `widget` place; it asks nothing before a click.
 import type { Locale } from '#shared/sections'
 
 const props = defineProps<{ locale: Locale; slug: string; title: string }>()
@@ -47,7 +48,8 @@ onMounted(() => {
       <slot />
     </main>
     <SiteSlot name="mascot" />
-    <SiteSlot name="widget" />
+    <SiteDemo :locale="locale" />
+    <SiteStats :locale="locale" />
     <footer class="site-footer">
       <nav :aria-label="texts.footerLabel">
         <ul class="site-footer__links">
