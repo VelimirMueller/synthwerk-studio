@@ -1,7 +1,17 @@
 // Data of the health view (synthwerk#40). Everything comes from the BFF routes in
 // server/api/health; the browser never calls pulse. Shapes: synthwerk-pulse
 // docs/features/live-status.md and docs/features/health-metrics.md.
+import type { AiCost } from '../utils/health'
 import type { AuthSession } from './useAuthSession'
+
+export type {
+  AiCost,
+  AiCostDay,
+  Alert,
+  AlertRule,
+  AlertSeverity,
+  AlertsAnswer
+} from '../utils/health'
 
 export type TargetStatus = 'unknown' | 'ok' | 'degraded' | 'down'
 
@@ -53,6 +63,7 @@ export interface PlatformMetrics {
     streams: { stream: string; messages: number; pending: number }[]
   } | null
   ai: AiNumbers | null
+  ai_cost?: AiCost | null
 }
 
 export interface OrgMetrics {
@@ -60,6 +71,7 @@ export interface OrgMetrics {
   window_seconds: number
   org_id: string
   ai: AiNumbers | null
+  ai_cost?: AiCost | null
 }
 
 export type MetricsAnswer =

@@ -4,11 +4,11 @@ slug: health-view
 status: beta
 epic: E4
 owner: studio
-paths: ["server/lib/health.ts", "server/utils/health.ts", "server/api/health/**", "app/pages/health.vue", "app/components/health/**", "app/composables/useHealthView.ts"]
-api: ["GET /api/health/status", "GET /api/health/stream", "GET /api/health/metrics"]
+paths: ["server/lib/health.ts", "server/utils/health.ts", "server/api/health/**", "app/pages/health.vue", "app/components/health/**", "app/composables/useHealthView.ts", "app/utils/health.ts"]
+api: ["GET /api/health/status", "GET /api/health/stream", "GET /api/health/metrics", "GET /api/health/alerts"]
 events: []
 mcp: []
-updated: 2026-10-30
+updated: 2026-11-16
 ---
 
 # Health view
@@ -16,6 +16,7 @@ updated: 2026-10-30
 > **In 30 seconds**
 >
 > - `/health` shows the live status, rate, errors and p95 per service, host and bus numbers, and the AI numbers (synthwerk#40).
+> - It also shows the active alerts with a trace link, and the AI cost per day (synthwerk#57).
 > - The browser never calls pulse. The BFF routes in `server/api/health` call pulse with the access token of the session.
 > - Operators see every number. Org owners and admins see the status and the AI numbers of their own org only.
 > - Members get 403. Pulse checks the token and the org again.
@@ -29,12 +30,19 @@ updated: 2026-10-30
 - An owner or admin gets the numbers of the session org (`/v1/orgs/{org}/metrics`). The org id never comes from the request.
 - An operator grant outside the platform org gets 403 from pulse. An org admin then falls back to the own org.
 - A part that pulse cannot read shows `-` or a short note. The other parts stay.
+- The page loads the active alerts from `GET /api/health/alerts` every 15 s, with the numbers.
+- Each alert shows its severity, summary, subject and age. Critical alerts come first.
+- "Open trace" opens the trace in a new tab. Pulse sends the link to operators only.
+- The page shows a link only for an `http` or `https` URL. Other URLs show no link.
+- A failed alerts load keeps the last list. The other numbers stay.
+- "AI cost per day" shows 7 UTC days from `ai_cost` of the numbers. Operators see all orgs, owners and admins their own org.
+- Answers without a price show as "unpriced". They add 0 to the cost.
 
 ## Access per role
 
 | Route | operator | owner, admin (own org) | member | no session |
 |---|---|---|---|---|
-| `GET /api/health/status`, `GET /api/health/stream` | 200 | 200 | 403 | 401 |
+| `GET /api/health/status`, `GET /api/health/stream`, `GET /api/health/alerts` | 200 | 200 | 403 | 401 |
 | `GET /api/health/metrics` | 200, `scope: platform` | 200, `scope: org` | 403 | 401 |
 
 - An owner or admin grant counts only in the org of the session.
@@ -77,9 +85,15 @@ updated: 2026-10-30
 - `tests/server/health.test.ts` — `GET /api/health/status - admin grant in another org only - 403`
 - `tests/server/health.test.ts` — `GET /api/health/metrics - false operator who is org admin - falls back to the own org`
 - `tests/server/health.test.ts` — `GET /api/health/stream - org admin - pulse events passed through as SSE`
+- `tests/server/health.test.ts` — `GET /api/health/alerts - member - 403, pulse not called`
+- `tests/server/health.test.ts` — `GET /api/health/alerts - org admin - pulse answer passed through, no trace link`
+- `tests/server/health.test.ts` — `GET /api/health/alerts - pulse answers 500 - 502 pulse_unavailable`
+- `tests/app/health.test.ts` — `safeTraceUrl - javascript, data, relative, empty - null`
+- `tests/app/health.test.ts` — `costTotal - days - sums cost, answers and unpriced answers`
 
 ## Changes
 
 | Date | Change |
 |---|---|
 | 2026-10-30 | First version (synthwerk#40). Needs synthwerk-pulse#5. |
+| 2026-11-16 | Active alerts with trace links and AI cost per day (synthwerk#57). Needs the pulse alerts and cost change. |
